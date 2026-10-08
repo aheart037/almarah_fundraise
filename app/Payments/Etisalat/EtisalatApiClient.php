@@ -46,6 +46,14 @@ final class EtisalatApiClient
             );
         }
 
+        // Appendix B's REST endpoint is /epg/rest. Older saved settings and
+        // .env files may contain only the host; preserve an explicit REST or
+        // reverse-proxy path, but complete a host-only URL automatically.
+        $path = parse_url($url, PHP_URL_PATH);
+        if (!is_string($path) || $path === '' || $path === '/') {
+            $url .= '/epg/rest';
+        }
+
         return $url;
     }
 
@@ -106,8 +114,17 @@ final class EtisalatApiClient
         }
 
         if (!$result->isJson()) {
+            if ($result->statusCode === 404) {
+                throw new PaymentGatewayException(
+                    'Etisalat returned HTTP 404. Check that the selected sandbox/live REST URL points to the UBL EPG /epg/rest endpoint.',
+                    'etisalat',
+                    'endpoint_not_found',
+                    $result->statusCode
+                );
+            }
+
             throw new PaymentGatewayException(
-                'Etisalat returned a response that was not valid JSON.',
+                'Etisalat returned a non-JSON response (HTTP ' . $result->statusCode . ').',
                 'etisalat',
                 'invalid_json',
                 $result->statusCode
@@ -135,30 +152,55 @@ final class EtisalatApiClient
      */
     public function extract(string $operation, array $response): array
     {
-        if (isset($response['Error']) && is_array($response['Error'])) {
-            $error = $response['Error'];
-            return [
-                'block'   => [],
-                'code'    => isset($error['Response']) ? (string) $error['Response'] : null,
-                'message' => isset($error['Description']) ? (string) $error['Description']
-                    : (isset($error['Message']) ? (string) $error['Message'] : 'Provider reported an error.'),
-            ];
-        }
-
-        // Case-insensitive lookup of the operation block.
         foreach ($response as $key => $value) {
-            if (strcasecmp((string) $key, $operation) === 0 && is_array($value)) {
-                $code = $value['Response'] ?? $value['response'] ?? $value['Status'] ?? $value['status'] ?? null;
-                $message = $value['Description'] ?? $value['description'] ?? $value['Message'] ?? $value['message'] ?? null;
+            if (strcasecmp((string) $key, 'Error') === 0 && is_array($value)) {
+                $error = array_change_key_case($value, CASE_LOWER);
+                $code = $error['responsecode'] ?? $error['response'] ?? $error['status'] ?? null;
+                $message = $error['responsedescription'] ?? $error['description'] ?? $error['message'] ?? null;
+
                 return [
-                    'block'   => $value,
-                    'code'    => $code === null ? null : (string) $code,
-                    'message' => $message === null ? null : (string) $message,
+                    'block'   => [],
+                    'code'    => is_scalar($code) ? (string) $code : null,
+                    'message' => is_scalar($message) ? (string) $message : 'Provider reported an error.',
                 ];
             }
         }
 
-        return ['block' => [], 'code' => null, 'message' => 'Provider response did not contain a ' . $operation . ' block.'];
+        // The EPG guide wraps Registration, Finalization and Refund responses
+        // in a shared Transaction object (not in the request operation name).
+        // Continue accepting operation-specific blocks for older EPG versions.
+        $block = null;
+        foreach ($response as $key => $value) {
+            if (strcasecmp((string) $key, $operation) === 0 && is_array($value)) {
+                $block = $value;
+                break;
+            }
+        }
+        if ($block === null) {
+            foreach ($response as $key => $value) {
+                if (strcasecmp((string) $key, 'Transaction') === 0 && is_array($value)) {
+                    $block = $value;
+                    break;
+                }
+            }
+        }
+
+        if ($block === null && (isset($response['ResponseCode']) || isset($response['Response']))) {
+            $block = $response;
+        }
+        if ($block === null) {
+            return ['block' => [], 'code' => null, 'message' => 'Provider response did not contain a Transaction block.'];
+        }
+
+        $fields = array_change_key_case($block, CASE_LOWER);
+        $code = $fields['responsecode'] ?? $fields['response'] ?? $fields['status'] ?? null;
+        $message = $fields['responsedescription'] ?? $fields['description'] ?? $fields['message'] ?? null;
+
+        return [
+            'block'   => $block,
+            'code'    => is_scalar($code) ? (string) $code : null,
+            'message' => is_scalar($message) ? (string) $message : null,
+        ];
     }
 
     public function describe(): string

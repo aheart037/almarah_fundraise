@@ -31,9 +31,9 @@ $fullName = trim((string) ($authUser['first_name'] ?? '') . ' ' . (string) ($aut
 <meta name="robots" content="noindex,nofollow">
 <meta name="csrf-token" content="<?= e(csrf_token()) ?>">
 <link rel="stylesheet" href="<?= e(asset('assets/css/style.css')) ?>">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='10' fill='%23a92d63'/%3E%3Cpath d='M24 15.2c5.9 0 11.2 2.3 15.2 6.1v17.2a3 3 0 0 1-3 3H11.8a3 3 0 0 1-3-3V21.3A21.6 21.6 0 0 1 24 15.2z' fill='%23f2c200'/%3E%3C/svg%3E">
+<?php require __DIR__ . '/../partials/favicon.php'; ?>
 </head>
-<body>
+<body class="admin-body">
 
 <?php require __DIR__ . '/../partials/header.php'; ?>
 

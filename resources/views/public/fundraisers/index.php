@@ -88,12 +88,14 @@
   </div>
 </section>
 
-<section class="section tight cta-band">
-  <div class="wrap">
-    <h2>Not seeing the cause you care about?</h2>
-    <p>Start your own fundraiser in about five minutes and rally your friends and family around it.</p>
-    <div class="cta-actions">
-      <a class="btn btn-gold btn-lg" href="<?= e(base_url('register')) ?>">Start Your Fundraiser</a>
+<?php if (can_fundraiser_capability('manage_pages')): ?>
+  <section class="section tight cta-band">
+    <div class="wrap">
+      <h2>Not seeing the cause you care about?</h2>
+      <p>Start your own fundraiser in about five minutes and rally your friends and family around it.</p>
+      <div class="cta-actions">
+        <a class="btn btn-gold btn-lg" href="<?= e(base_url('register')) ?>">Start Your Fundraiser</a>
+      </div>
     </div>
-  </div>
-</section>
+  </section>
+<?php endif; ?>

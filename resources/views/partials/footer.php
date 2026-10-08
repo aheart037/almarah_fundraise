@@ -8,17 +8,22 @@ use App\Core\Config;
 $org = (array) Config::get('app.org', []);
 $appName = (string) Config::get('app.name', 'Almarah Foundation');
 $year = date('Y');
+$footerLogoUrl = site_brand_asset('site.footer_logo');
 ?>
 <footer class="site-footer" id="site-footer">
   <div class="wrap">
     <div class="footer-top">
       <div class="footer-brand">
         <a class="brand-lockup" href="<?= e(base_url('/')) ?>" aria-label="<?= e($appName) ?> home">
-          <svg width="42" height="42" viewBox="0 0 48 48" fill="none" aria-hidden="true">
-            <path d="M24 15.2c5.9 0 11.2 2.3 15.2 6.1v17.2a3 3 0 0 1-3 3H11.8a3 3 0 0 1-3-3V21.3A21.6 21.6 0 0 1 24 15.2z" fill="#f2c200"/>
-            <path d="M24 22.4l2 4.1 4.5.6-3.3 3.2.8 4.5-4-2.1-4 2.1.8-4.5-3.3-3.2 4.5-.6z" fill="#6b0f35"/>
-          </svg>
-          <span class="word"><strong>ALMARAH</strong><span>Foundation</span></span>
+          <?php if ($footerLogoUrl !== null): ?>
+            <img class="brand-custom-logo" src="<?= e($footerLogoUrl) ?>" alt="">
+          <?php else: ?>
+            <svg width="42" height="42" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+              <path d="M24 15.2c5.9 0 11.2 2.3 15.2 6.1v17.2a3 3 0 0 1-3 3H11.8a3 3 0 0 1-3-3V21.3A21.6 21.6 0 0 1 24 15.2z" fill="#f2c200"/>
+              <path d="M24 22.4l2 4.1 4.5.6-3.3 3.2.8 4.5-4-2.1-4 2.1.8-4.5-3.3-3.2 4.5-.6z" fill="#6b0f35"/>
+            </svg>
+            <span class="word"><strong>ALMARAH</strong><span>Foundation</span></span>
+          <?php endif; ?>
         </a>
         <p><?= e((string) ($org['footer_note'] ?? ($appName . ' has been walking alongside orphaned and vulnerable children since ' . ($org['founded'] ?? '2021') . '. A safe home, a full plate, a place in school — and the dignity to dream bigger.'))) ?></p>
         <div class="socials">
@@ -37,7 +42,7 @@ $year = date('Y');
       <div>
         <h5>Fundraise</h5>
         <ul class="footer-links">
-          <li><a href="<?= e(base_url('register')) ?>">Start a Fundraiser</a></li>
+          <?php if (can_fundraiser_capability('manage_pages')): ?><li><a href="<?= e(base_url('register')) ?>">Start a Fundraiser</a></li><?php endif; ?>
           <li><a href="<?= e(base_url('fundraisers')) ?>">Support a Fundraiser</a></li>
           <li><a href="<?= e(base_url('teams')) ?>">Top Teams</a></li>
           <li><a href="<?= e(base_url('campaigns')) ?>">Appeal Campaigns</a></li>

@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Core\Csrf;
 use App\Core\Database;
+use App\Core\Logger;
 use App\Core\Request;
 use App\Core\Response;
 use App\Core\Session;
@@ -17,6 +18,7 @@ use App\Repositories\FundraiserRepository;
 use App\Services\AuthService;
 use App\Services\FundraiserService;
 use InvalidArgumentException;
+use Throwable;
 
 /**
  * Moderation queue and fundraiser administration.
@@ -34,7 +36,8 @@ final class FundraiserController extends Controller
         private FundraiserRepository $fundraisers,
         private FundraiserService $service,
         private DonationRepository $donations,
-        private Database $db
+        private Database $db,
+        private Logger $logger
     ) {
         parent::__construct($view, $session, $csrf, $auth);
     }
@@ -198,20 +201,51 @@ final class FundraiserController extends Controller
         }
 
         try {
-            match ($action) {
-                'approve'         => $this->service->approve($id, $adminId, $reason),
-                'reject'          => $this->service->reject($id, $adminId, $reason),
-                'request_changes' => $this->service->requestChanges($id, $adminId, $reason),
-                'pause'           => $this->service->pause($id, $adminId, $reason),
-                'publish'         => $this->service->publish($id, $adminId),
-                'unpublish'       => $this->service->unpublish($id, $adminId),
-                'archive'         => $this->service->archive($id, $adminId),
-                'delete'          => $this->service->softDelete($id, $adminId),
-                'feature'         => $this->service->setFeatured($id, $request->bool('featured', true), $adminId),
-                default           => throw new InvalidArgumentException('Unknown action.'),
-            };
+            // These commands return void; use a statement switch rather than a
+            // match expression so no command return value is evaluated.
+            switch ($action) {
+                case 'approve':
+                    $this->service->approve($id, $adminId, $reason);
+                    break;
+                case 'reject':
+                    $this->service->reject($id, $adminId, $reason);
+                    break;
+                case 'request_changes':
+                    $this->service->requestChanges($id, $adminId, $reason);
+                    break;
+                case 'pause':
+                    $this->service->pause($id, $adminId, $reason);
+                    break;
+                case 'publish':
+                    $this->service->publish($id, $adminId);
+                    break;
+                case 'unpublish':
+                    $this->service->unpublish($id, $adminId);
+                    break;
+                case 'archive':
+                    $this->service->archive($id, $adminId);
+                    break;
+                case 'delete':
+                    $this->service->softDelete($id, $adminId);
+                    break;
+                case 'feature':
+                    $this->service->setFeatured($id, $request->bool('featured', true), $adminId);
+                    break;
+                default:
+                    throw new InvalidArgumentException('Unknown action.');
+            }
         } catch (InvalidArgumentException $e) {
             $this->flashError($e->getMessage());
+            return $this->redirect('/admin/fundraisers/' . $id);
+        } catch (Throwable $e) {
+            $this->logger->error('Fundraiser moderation action failed', [
+                'action'        => $action,
+                'fundraiser_id' => $id,
+                'admin_id'      => $adminId,
+                'exception'     => get_class($e),
+                'message'       => $e->getMessage(),
+            ]);
+            $this->flashError('That action could not be completed due to an unexpected error. The error has been logged; reload before retrying.');
             return $this->redirect('/admin/fundraisers/' . $id);
         }
 

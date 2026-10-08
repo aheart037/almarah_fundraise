@@ -85,25 +85,78 @@
   </div>
 </section>
 
-<section class="section">
+<?php
+$trustHeading = trim((string) ($trust['heading'] ?? ''));
+$trustHeading = $trustHeading !== '' ? $trustHeading : 'Your donation is safe and accountable';
+$trustBody = trim((string) ($trust['body'] ?? ''));
+$trustBody = $trustBody !== ''
+    ? $trustBody
+    : 'Card payments are completed on the payment provider’s secure page. We verify each payment before marking it complete and record a reference for follow-up.';
+$trustPoints = array_values(array_filter(
+    array_map(static fn (string $point): string => trim($point), explode('|', (string) ($trust['points'] ?? ''))),
+    static fn (string $point): bool => $point !== ''
+));
+if ($trustPoints === []) {
+    $trustPoints = [
+        'Card details never touch our servers.',
+        'We verify payments with the provider before counting them.',
+        'Every donation has a reference our team can use to help trace it.',
+    ];
+}
+?>
+<section class="section about-trust" aria-labelledby="about-trust-title">
   <div class="wrap">
-    <div class="split">
-      <div class="reveal">
-        <span class="eyebrow brand left">Accountability</span>
-        <h2 class="section-title"><?= e((string) ($trust['heading'] ?? 'Your donation is safe and accountable')) ?></h2>
-        <div class="rule"></div>
-        <p class="lead"><?= e((string) ($trust['body'] ?? '')) ?></p>
+    <div class="about-trust__panel">
+      <div class="about-trust__header">
+        <div class="about-trust__intro">
+          <span class="about-trust__eyebrow">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z"/><path d="m9 12 2 2 4-4"/></svg>
+            Payment security &amp; accountability
+          </span>
+          <h2 id="about-trust-title"><?= e($trustHeading) ?></h2>
+          <p><?= e($trustBody) ?></p>
+        </div>
+
+        <div class="about-trust__secure-badge">
+          <span class="about-trust__secure-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><path d="m9.5 15 1.7 1.7 3.5-3.5"/></svg>
+          </span>
+          <span><strong>Secure card checkout</strong><small>Your card details stay with the payment provider.</small></span>
+        </div>
       </div>
-      <div class="reveal">
-        <ul class="checkline">
-          <?php foreach (explode('|', (string) ($trust['points'] ?? '')) as $point): ?>
-            <?php if (trim($point) === '') { continue; } ?>
-            <li>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
-              <span><?= e(trim($point)) ?></span>
-            </li>
+
+      <div class="about-trust__content">
+        <div class="about-trust__label">
+          <span>How we protect your donation</span>
+          <span>Clear safeguards, from payment to follow-up</span>
+        </div>
+        <div class="about-trust__grid">
+          <?php foreach ($trustPoints as $index => $point): ?>
+            <article class="about-trust__card">
+              <div class="about-trust__card-top">
+                <span class="about-trust__number"><?= e(str_pad((string) ($index + 1), 2, '0', STR_PAD_LEFT)) ?></span>
+                <span class="about-trust__check" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg>
+                </span>
+              </div>
+              <p><?= e($point) ?></p>
+            </article>
           <?php endforeach; ?>
-        </ul>
+        </div>
+      </div>
+
+      <div class="about-trust__footer">
+        <span class="about-trust__footer-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l5 5v13H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg>
+        </span>
+        <div class="about-trust__footer-copy">
+          <strong>Need help with a donation?</strong>
+          <span>Keep your public reference handy so our team can find the transaction.</span>
+        </div>
+        <a class="btn btn-outline-brand" href="<?= e(base_url('support')) ?>">
+          Contact support
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </a>
       </div>
     </div>
   </div>
@@ -114,8 +167,10 @@
     <h2>Turn your occasion into a child&rsquo;s future</h2>
     <p>Start a fundraiser in five minutes and invite the people who already care about what you care about.</p>
     <div class="cta-actions">
-      <a class="btn btn-gold btn-lg" href="<?= e(base_url('register')) ?>">Start Your Fundraiser</a>
-      <span class="or">or</span>
+      <?php if (can_fundraiser_capability('manage_pages')): ?>
+        <a class="btn btn-gold btn-lg" href="<?= e(base_url('register')) ?>">Start Your Fundraiser</a>
+        <span class="or">or</span>
+      <?php endif; ?>
       <a class="btn btn-outline-light btn-lg" href="<?= e(base_url('support')) ?>">Talk to our team</a>
     </div>
   </div>

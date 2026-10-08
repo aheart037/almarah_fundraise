@@ -20,7 +20,9 @@ $currency = (string) ($fundraiser['currency'] ?? 'PKR');
   </div>
   <div class="sr-actions">
     <a class="btn btn-outline-brand" href="<?= e(base_url('dashboard/fundraisers/' . $id . '/donations/export')) ?>">Export CSV</a>
-    <a class="btn btn-light" href="<?= e(base_url('dashboard/fundraisers/' . $id . '/edit')) ?>">Edit fundraiser</a>
+    <?php if (can_fundraiser_capability('manage_pages')): ?>
+      <a class="btn btn-light" href="<?= e(base_url('dashboard/fundraisers/' . $id . '/edit')) ?>">Edit fundraiser</a>
+    <?php endif; ?>
   </div>
 </div>
 

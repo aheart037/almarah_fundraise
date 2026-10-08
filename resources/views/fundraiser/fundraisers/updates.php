@@ -6,6 +6,8 @@
  * @var array $updates
  */
 $id = (int) $fundraiser['id'];
+$canManagePages = can_fundraiser_capability('manage_pages');
+$canPublishUpdates = can_fundraiser_capability('publish_updates');
 ?>
 <div class="dash-head">
   <div>
@@ -13,7 +15,9 @@ $id = (int) $fundraiser['id'];
     <p class="sub"><?= e((string) $fundraiser['title']) ?></p>
   </div>
   <div class="sr-actions">
-    <a class="btn btn-light" href="<?= e(base_url('dashboard/fundraisers/' . $id . '/edit')) ?>">Edit fundraiser</a>
+    <?php if ($canManagePages): ?>
+      <a class="btn btn-light" href="<?= e(base_url('dashboard/fundraisers/' . $id . '/edit')) ?>">Edit fundraiser</a>
+    <?php endif; ?>
     <?php if ((string) $fundraiser['status'] === 'published'): ?>
       <a class="btn btn-outline-brand" href="<?= e(base_url('fundraisers/' . (string) $fundraiser['slug'])) ?>">View public page</a>
     <?php endif; ?>
@@ -25,7 +29,8 @@ $id = (int) $fundraiser['id'];
     <h2>Post an update</h2>
     <p class="panel-sub">Updates are emailed to everyone who has supported this fundraiser.</p>
 
-    <form method="post" action="<?= e(base_url('dashboard/fundraisers/' . $id . '/updates')) ?>" enctype="multipart/form-data" novalidate>
+    <?php if ($canPublishUpdates): ?>
+      <form method="post" action="<?= e(base_url('dashboard/fundraisers/' . $id . '/updates')) ?>" enctype="multipart/form-data" novalidate>
       <?= csrf_field() ?>
 
       <div class="field <?= error_for('title') !== '' ? 'is-invalid' : '' ?>">
@@ -49,7 +54,10 @@ $id = (int) $fundraiser['id'];
       </div>
 
       <button class="btn btn-brand btn-lg" type="submit" data-confirm="Publish this update and email your supporters?">Publish update</button>
-    </form>
+      </form>
+    <?php else: ?>
+      <div class="alert alert-info"><p>Publishing fundraiser updates is currently disabled by an administrator.</p></div>
+    <?php endif; ?>
   </section>
 
   <section class="panel">
@@ -73,7 +81,7 @@ $id = (int) $fundraiser['id'];
             </span>
             <div class="what"><?= e((string) $update['title']) ?></div>
             <div class="meta"><?= e(mb_substr((string) $update['body'], 0, 220)) ?><?= mb_strlen((string) $update['body']) > 220 ? '…' : '' ?></div>
-            <?php if ((string) $update['status'] === 'published'): ?>
+            <?php if ($canPublishUpdates && (string) $update['status'] === 'published'): ?>
               <form method="post" class="inline-form mt-1"
                     action="<?= e(base_url('dashboard/fundraisers/' . $id . '/updates/' . (string) $update['id'] . '/delete')) ?>"
                     data-confirm="Delete this update? It will be removed from the public page. Donors who already received the email keep their copy.">

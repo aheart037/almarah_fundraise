@@ -270,6 +270,59 @@ if (!function_exists('status_badge_class')) {
     }
 }
 
+if (!function_exists('site_brand_asset')) {
+    /** Resolve one of the uploaded brand assets with a file-mtime cache key. */
+    function site_brand_asset(string $settingKey): ?string
+    {
+        if (!in_array($settingKey, ['site.header_logo', 'site.footer_logo', 'site.favicon'], true)) {
+            return null;
+        }
+
+        $path = app(\App\Services\SettingsService::class)->get($settingKey, '');
+        if (!is_string($path) || $path === '' || str_contains($path, '..') || str_contains($path, '\\')) {
+            return null;
+        }
+
+        $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+        if (!in_array($extension, ['jpg', 'jpeg', 'png', 'webp'], true)
+            || ($settingKey === 'site.favicon' && $extension !== 'png')) {
+            return null;
+        }
+
+        $uploadDirectory = trim((string) Config::get('security.uploads.directory', 'uploads'), '/');
+        $brandingDirectory = $uploadDirectory . '/branding';
+        if (!str_starts_with($path, $brandingDirectory . '/')) {
+            return null;
+        }
+
+        $absolutePath = \App\Core\Paths::publicPath(app()->basePath()) . '/' . $path;
+        if (!is_file($absolutePath)) {
+            return null;
+        }
+
+        // asset() adds a ?v=filemtime suffix, and each replacement also uses a
+        // random filename, so logos and favicons cannot remain browser-stale.
+        return asset($path);
+    }
+}
+
+if (!function_exists('can_fundraiser_capability')) {
+    /** Capability check for views; server-side route middleware remains authoritative. */
+    function can_fundraiser_capability(string $capability): bool
+    {
+        $auth = app(\App\Services\AuthService::class);
+        if ($auth->isAdmin()) {
+            return true;
+        }
+
+        if ($auth->check() && !$auth->hasRole('fundraiser')) {
+            return false;
+        }
+
+        return app(\App\Services\FundraiserCapabilityService::class)->enabled($capability);
+    }
+}
+
 if (!function_exists('abort')) {
     function abort(int $status, string $message = ''): never
     {

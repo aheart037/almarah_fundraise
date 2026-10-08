@@ -84,6 +84,8 @@ return static function (Router $router) use ($admin, $adminCsrf, $superCsrf): vo
     $router->post('/admin/settings/smtp/test-connection', [SettingsController::class, 'testSmtp'], $superCsrf, 'admin.settings.smtp.test');
     $router->post('/admin/settings/smtp/send-test', [SettingsController::class, 'sendTestEmail'], $superCsrf, 'admin.settings.smtp.send');
     $router->post('/admin/settings/site', [SettingsController::class, 'saveSite'], $adminCsrf, 'admin.settings.site');
+    $router->post('/admin/settings/fundraiser-capabilities', [SettingsController::class, 'saveFundraiserCapabilities'], $adminCsrf, 'admin.settings.fundraiser_capabilities');
+    $router->post('/admin/settings/branding', [SettingsController::class, 'saveBranding'], $adminCsrf, 'admin.settings.branding');
     $router->post('/admin/settings/gateway/{code}/test', [SettingsController::class, 'testGateway'], $superCsrf, 'admin.settings.gateway.test');
 
     // --- audit --------------------------------------------------------------

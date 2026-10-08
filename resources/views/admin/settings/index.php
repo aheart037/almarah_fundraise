@@ -7,10 +7,14 @@
  * @var array $mail
  * @var bool $mailConfigured
  * @var array $site
+ * @var array $fundraiserCapabilities
  * @var array $queueStats
  */
 
 $isSuper = app(\App\Services\AuthService::class)->isSuperAdmin();
+$headerLogoUrl = site_brand_asset('site.header_logo');
+$footerLogoUrl = site_brand_asset('site.footer_logo');
+$faviconUrl = site_brand_asset('site.favicon');
 ?>
 <div class="dash-head">
   <div>
@@ -24,6 +28,8 @@ $isSuper = app(\App\Services\AuthService::class)->isSuperAdmin();
     <a href="#gateway-<?= e($code) ?>"><?= e(ucfirst($code)) ?></a>
   <?php endforeach; ?>
   <a href="#smtp">Email / SMTP</a>
+  <a href="#branding">Branding</a>
+  <a href="#fundraiser-capabilities">Fundraiser controls</a>
   <a href="#site">Site &amp; donations</a>
   <a href="#queue">Queue</a>
 </nav>
@@ -123,13 +129,16 @@ $isSuper = app(\App\Services\AuthService::class)->isSuperAdmin();
 
       <div class="form-row">
         <div class="field">
-          <label for="<?= e($code) ?>_sandbox_url">Sandbox endpoint</label>
+          <label for="<?= e($code) ?>_sandbox_url"><?= $code === 'etisalat' ? 'Sandbox REST endpoint' : 'Sandbox endpoint' ?></label>
           <input class="input mono" type="url" id="<?= e($code) ?>_sandbox_url" name="sandbox_url" value="<?= e((string) ($config['sandbox_url'] ?? '')) ?>">
+          <?php if ($code === 'etisalat'): ?>
+            <span class="form-help">UBL EPG uses the /epg/rest path. It is added automatically when only the host is configured.</span>
+          <?php endif; ?>
         </div>
         <div class="field">
-          <label for="<?= e($code) ?>_live_url">Live endpoint</label>
+          <label for="<?= e($code) ?>_live_url"><?= $code === 'etisalat' ? 'Live REST endpoint' : 'Live endpoint' ?></label>
           <input class="input mono" type="url" id="<?= e($code) ?>_live_url" name="live_url" value="<?= e((string) ($config['live_url'] ?? '')) ?>">
-          <span class="form-help">Only hosts on this gateway&rsquo;s allowlist are accepted for the payment page.</span>
+          <span class="form-help">Payment-page hosts returned by the gateway are checked against its allowlist.</span>
         </div>
       </div>
 
@@ -275,6 +284,139 @@ $isSuper = app(\App\Services\AuthService::class)->isSuperAdmin();
       </form>
     </div>
   <?php endif; ?>
+</section>
+
+<section class="panel" id="branding">
+  <div class="panel-head">
+    <div>
+      <h2>Brand identity</h2>
+      <p class="panel-sub">Update the logos and browser icon shown across the public site and account pages.</p>
+    </div>
+  </div>
+
+  <form method="post" action="<?= e(base_url('admin/settings/branding')) ?>" enctype="multipart/form-data">
+    <?= csrf_field() ?>
+
+    <div class="branding-grid">
+      <article class="branding-item">
+        <div class="branding-item__heading">
+          <h3>Header logo</h3>
+          <p>Shown in the main site navigation.</p>
+        </div>
+        <div class="branding-preview branding-preview--logo">
+          <div class="branding-preview__fallback" id="header-logo-fallback" <?= $headerLogoUrl !== null ? 'hidden' : '' ?>>
+            <span class="branding-preview__mark" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M24 5c4 5.3 6 9.4 6 13.5 0 3.8-2.6 6.4-6 6.4s-6-2.6-6-6.4C18 14.4 20 10.3 24 5Z" fill="currentColor"/><path d="M24 16c6 0 11.2 2.2 15 6v16a3 3 0 0 1-3 3H12a3 3 0 0 1-3-3V22c4-3.8 9.2-6 15-6Z" fill="currentColor"/><path d="m24 22 2 4 4.5.7-3.2 3.1.8 4.5-4.1-2.1-4.1 2.1.8-4.5-3.2-3.1 4.5-.7z" fill="#6b0f35"/></svg></span>
+            <span class="branding-preview__word"><strong>ALMARAH</strong><small>Foundation</small></span>
+          </div>
+          <img class="branding-preview__image" id="header-logo-preview" src="<?= e($headerLogoUrl ?? 'data:,') ?>" alt="Header logo preview" <?= $headerLogoUrl === null ? 'hidden' : '' ?>>
+        </div>
+        <label class="branding-item__label" for="brand-header-logo">Upload a new header logo</label>
+        <input class="input branding-file" type="file" id="brand-header-logo" name="header_logo" accept="image/png,image/jpeg,image/webp"
+               data-branding-input data-branding-preview="header-logo-preview" data-branding-fallback="header-logo-fallback"
+               data-branding-remove="remove-header-logo" data-current-src="<?= e($headerLogoUrl ?? '') ?>">
+        <span class="form-help">PNG, JPG or WebP, up to 4 MB. A transparent, horizontal logo works best.</span>
+        <?php if ($headerLogoUrl !== null): ?>
+          <label class="checkbox-row branding-reset" for="remove-header-logo">
+            <input type="checkbox" id="remove-header-logo" name="remove_header_logo" value="1">
+            <span>Restore the built-in Almarah logo</span>
+          </label>
+        <?php endif; ?>
+      </article>
+
+      <article class="branding-item">
+        <div class="branding-item__heading">
+          <h3>Footer logo</h3>
+          <p>Shown in the site footer.</p>
+        </div>
+        <div class="branding-preview branding-preview--logo">
+          <div class="branding-preview__fallback" id="footer-logo-fallback" <?= $footerLogoUrl !== null ? 'hidden' : '' ?>>
+            <span class="branding-preview__mark" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M24 5c4 5.3 6 9.4 6 13.5 0 3.8-2.6 6.4-6 6.4s-6-2.6-6-6.4C18 14.4 20 10.3 24 5Z" fill="currentColor"/><path d="M24 16c6 0 11.2 2.2 15 6v16a3 3 0 0 1-3 3H12a3 3 0 0 1-3-3V22c4-3.8 9.2-6 15-6Z" fill="currentColor"/><path d="m24 22 2 4 4.5.7-3.2 3.1.8 4.5-4.1-2.1-4.1 2.1.8-4.5-3.2-3.1 4.5-.7z" fill="#6b0f35"/></svg></span>
+            <span class="branding-preview__word"><strong>ALMARAH</strong><small>Foundation</small></span>
+          </div>
+          <img class="branding-preview__image" id="footer-logo-preview" src="<?= e($footerLogoUrl ?? 'data:,') ?>" alt="Footer logo preview" <?= $footerLogoUrl === null ? 'hidden' : '' ?>>
+        </div>
+        <label class="branding-item__label" for="brand-footer-logo">Upload a new footer logo</label>
+        <input class="input branding-file" type="file" id="brand-footer-logo" name="footer_logo" accept="image/png,image/jpeg,image/webp"
+               data-branding-input data-branding-preview="footer-logo-preview" data-branding-fallback="footer-logo-fallback"
+               data-branding-remove="remove-footer-logo" data-current-src="<?= e($footerLogoUrl ?? '') ?>">
+        <span class="form-help">PNG, JPG or WebP, up to 4 MB. Use a light version if the logo is designed for a dark background.</span>
+        <?php if ($footerLogoUrl !== null): ?>
+          <label class="checkbox-row branding-reset" for="remove-footer-logo">
+            <input type="checkbox" id="remove-footer-logo" name="remove_footer_logo" value="1">
+            <span>Restore the built-in Almarah logo</span>
+          </label>
+        <?php endif; ?>
+      </article>
+
+      <article class="branding-item">
+        <div class="branding-item__heading">
+          <h3>Favicon</h3>
+          <p>Shown in browser tabs and bookmarks.</p>
+        </div>
+        <div class="branding-preview branding-preview--favicon">
+          <div class="branding-preview__favicon-fallback" id="favicon-fallback" <?= $faviconUrl !== null ? 'hidden' : '' ?>>
+            <svg viewBox="0 0 48 48" aria-hidden="true"><rect width="48" height="48" rx="10" fill="#a92d63"/><path d="M24 15.2c5.9 0 11.2 2.3 15.2 6.1v17.2a3 3 0 0 1-3 3H11.8a3 3 0 0 1-3-3V21.3A21.6 21.6 0 0 1 24 15.2z" fill="#f2c200"/></svg>
+          </div>
+          <img class="branding-preview__image" id="favicon-preview" src="<?= e($faviconUrl ?? 'data:,') ?>" alt="Favicon preview" <?= $faviconUrl === null ? 'hidden' : '' ?>>
+        </div>
+        <label class="branding-item__label" for="brand-favicon">Upload a PNG favicon</label>
+        <input class="input branding-file" type="file" id="brand-favicon" name="favicon" accept="image/png,.png"
+               data-branding-input data-branding-preview="favicon-preview" data-branding-fallback="favicon-fallback"
+               data-branding-remove="remove-favicon" data-current-src="<?= e($faviconUrl ?? '') ?>">
+        <span class="form-help">PNG only, up to 4 MB. A square image with a transparent background is recommended.</span>
+        <?php if ($faviconUrl !== null): ?>
+          <label class="checkbox-row branding-reset" for="remove-favicon">
+            <input type="checkbox" id="remove-favicon" name="remove_favicon" value="1">
+            <span>Restore the built-in favicon</span>
+          </label>
+        <?php endif; ?>
+      </article>
+    </div>
+
+    <div class="form-actions branding-actions">
+      <button class="btn btn-brand" type="submit">Save branding</button>
+      <span class="form-help">Images update across the site immediately; file URLs are versioned to refresh browser caches.</span>
+    </div>
+  </form>
+</section>
+
+<section class="panel" id="fundraiser-capabilities">
+  <div class="panel-head">
+    <div>
+      <h2>Fundraiser capabilities</h2>
+      <p class="panel-sub">Control which tools are available to fundraiser accounts.</p>
+    </div>
+  </div>
+
+  <div class="alert alert-info">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.5h.01"/></svg>
+    <p>These platform-wide controls apply immediately to existing and newly registered fundraiser accounts. Administrators retain access.</p>
+  </div>
+
+  <form method="post" action="<?= e(base_url('admin/settings/fundraiser-capabilities')) ?>">
+    <?= csrf_field() ?>
+
+    <div class="capability-options">
+      <label class="checkbox-row capability-option">
+        <input type="checkbox" name="manage_pages" value="1" <?= !empty($fundraiserCapabilities['manage_pages']) ? 'checked' : '' ?>>
+        <span><b>Create and manage fundraiser pages</b><em>Allow fundraiser accounts to create drafts, edit details, submit pages for review, and pause their fundraisers.</em></span>
+      </label>
+
+      <label class="checkbox-row capability-option">
+        <input type="checkbox" name="manage_teams" value="1" <?= !empty($fundraiserCapabilities['manage_teams']) ? 'checked' : '' ?>>
+        <span><b>Manage fundraising teams</b><em>Allow fundraiser accounts to create teams, invite or remove members, and accept team invitations.</em></span>
+      </label>
+
+      <label class="checkbox-row capability-option">
+        <input type="checkbox" name="publish_updates" value="1" <?= !empty($fundraiserCapabilities['publish_updates']) ? 'checked' : '' ?>>
+        <span><b>Publish fundraiser updates</b><em>Allow fundraiser accounts to post and remove updates on their fundraiser pages.</em></span>
+      </label>
+    </div>
+
+    <div class="form-actions">
+      <button class="btn btn-brand" type="submit">Save fundraiser controls</button>
+    </div>
+  </form>
 </section>
 
 <section class="panel" id="site">

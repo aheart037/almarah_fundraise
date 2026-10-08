@@ -210,13 +210,25 @@ final class FundraiserService
         $this->audit->log('fundraiser.approved', 'fundraiser', (string) $id, ['note' => $note], $adminId);
         $this->logger->info('Fundraiser approved', ['id' => $id, 'admin' => $adminId]);
 
-        $owner = $this->ownerOf($fundraiser);
-        if ($owner !== null) {
-            $this->mailer->fundraiserApproved(
-                (string) $owner['email'],
-                (string) $owner['first_name'],
-                $this->fundraisers->find($id) ?? $fundraiser
-            );
+        // Approval is the primary operation; the notification is a secondary
+        // side effect and must not turn a committed approval into an HTTP 500.
+        try {
+            $owner = $this->ownerOf($fundraiser);
+            if ($owner !== null) {
+                $approvedFundraiser = $this->fundraisers->find($id) ?? $fundraiser;
+                $this->mailer->fundraiserApproved(
+                    (string) $owner['email'],
+                    (string) $owner['first_name'],
+                    $approvedFundraiser
+                );
+            }
+        } catch (\Throwable $e) {
+            $this->logger->error('Fundraiser was approved but its owner notification could not be queued', [
+                'fundraiser_id' => $id,
+                'admin_id'      => $adminId,
+                'exception'     => get_class($e),
+                'message'       => $e->getMessage(),
+            ]);
         }
     }
 

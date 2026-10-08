@@ -11,6 +11,9 @@
  * @var bool $verified
  */
 
+$canManagePages = can_fundraiser_capability('manage_pages');
+$canManageTeams = can_fundraiser_capability('manage_teams');
+$canPublishUpdates = can_fundraiser_capability('publish_updates');
 $raised = (int) ($totals['raised_minor'] ?? 0);
 $donationCount = (int) ($totals['donation_count'] ?? 0);
 $active = 0;
@@ -24,8 +27,12 @@ foreach ($fundraisers as $row) {
     <p class="sub">Here is how your fundraising is going.</p>
   </div>
   <div class="sr-actions">
-    <a class="btn btn-outline-brand" href="<?= e(base_url('dashboard/teams')) ?>">My teams</a>
-    <a class="btn btn-brand" href="<?= e(base_url('dashboard/fundraisers/create')) ?>">Start a fundraiser</a>
+    <?php if ($canManageTeams): ?>
+      <a class="btn btn-outline-brand" href="<?= e(base_url('dashboard/teams')) ?>">My teams</a>
+    <?php endif; ?>
+    <?php if ($canManagePages): ?>
+      <a class="btn btn-brand" href="<?= e(base_url('dashboard/fundraisers/create')) ?>">Start a fundraiser</a>
+    <?php endif; ?>
   </div>
 </div>
 
@@ -67,17 +74,19 @@ foreach ($fundraisers as $row) {
     <div class="d"><?= e((string) count($fundraisers)) ?> total fundraiser<?= count($fundraisers) === 1 ? '' : 's' ?></div>
   </div>
 
-  <div class="stat-card">
-    <div class="k">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-      Teams
+  <?php if ($canManageTeams): ?>
+    <div class="stat-card">
+      <div class="k">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Teams
+      </div>
+      <div class="v"><?= e((string) count($teams)) ?></div>
+      <div class="d">Teams you belong to</div>
     </div>
-    <div class="v"><?= e((string) count($teams)) ?></div>
-    <div class="d">Teams you belong to</div>
-  </div>
+  <?php endif; ?>
 </div>
 
-<?php if ($needsAttention !== []): ?>
+<?php if ($needsAttention !== [] && $canManagePages): ?>
   <section class="panel tint">
     <h2>Needs your attention</h2>
     <p class="panel-sub">These fundraisers are not live yet.</p>
@@ -119,8 +128,12 @@ foreach ($fundraisers as $row) {
     <?php if ($fundraisers === []): ?>
       <div class="empty-state">
         <h3>No fundraisers yet</h3>
-        <p>Start one and share it with the people who already care about your cause.</p>
-        <a class="btn btn-brand" href="<?= e(base_url('dashboard/fundraisers/create')) ?>">Start a fundraiser</a>
+        <?php if ($canManagePages): ?>
+          <p>Start one and share it with the people who already care about your cause.</p>
+          <a class="btn btn-brand" href="<?= e(base_url('dashboard/fundraisers/create')) ?>">Start a fundraiser</a>
+        <?php else: ?>
+          <p>Fundraiser page creation is currently disabled by an administrator.</p>
+        <?php endif; ?>
       </div>
     <?php else: ?>
       <div class="table-wrap">
@@ -132,7 +145,11 @@ foreach ($fundraisers as $row) {
             <?php foreach (array_slice($fundraisers, 0, 6) as $row): ?>
               <tr>
                 <td class="wrap">
-                  <a href="<?= e(base_url('dashboard/fundraisers/' . (string) $row['id'] . '/edit')) ?>"><?= e((string) $row['title']) ?></a>
+                  <?php if ($canManagePages): ?>
+                    <a href="<?= e(base_url('dashboard/fundraisers/' . (string) $row['id'] . '/edit')) ?>"><?= e((string) $row['title']) ?></a>
+                  <?php else: ?>
+                    <?= e((string) $row['title']) ?>
+                  <?php endif; ?>
                   <div class="muted mono" style="font-size:12px"><?= e((string) $row['slug']) ?></div>
                 </td>
                 <td><span class="<?= e(status_badge_class((string) $row['status'])) ?>"><?= e(str_replace('_', ' ', (string) $row['status'])) ?></span></td>
@@ -189,7 +206,7 @@ foreach ($fundraisers as $row) {
               <td class="wrap"><?= e((string) $row['title']) ?></td>
               <td><?= e(dt((string) $row['end_at'], 'j M Y')) ?></td>
               <td class="num"><?= e(money_short((int) ($row['raised_minor'] ?? 0))) ?></td>
-              <td><a class="btn btn-light btn-sm" href="<?= e(base_url('dashboard/fundraisers/' . (string) $row['id'] . '/updates')) ?>">Post update</a></td>
+              <td><a class="btn btn-light btn-sm" href="<?= e(base_url('dashboard/fundraisers/' . (string) $row['id'] . '/updates')) ?>"><?= $canPublishUpdates ? 'Post update' : 'View updates' ?></a></td>
             </tr>
           <?php endforeach; ?>
         </tbody>

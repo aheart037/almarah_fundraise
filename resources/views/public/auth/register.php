@@ -14,7 +14,7 @@
       <ul class="checkline mt-3">
         <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span>No setup fee, no minimum goal</span></li>
         <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span>Reviewed by our team, usually within a day</span></li>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span>Teams, updates and CSV exports included</span></li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span>Support from the Almarah team throughout your journey</span></li>
       </ul>
     </div>
   </div>
@@ -22,7 +22,13 @@
   <div class="auth-form-wrap">
     <div class="auth-card">
       <h1>Create your account</h1>
-      <p class="text-muted">Takes a minute. You can start a fundraiser straight away.</p>
+      <p class="text-muted">
+        <?php if (can_fundraiser_capability('manage_pages')): ?>
+          Takes a minute. You can start a fundraiser straight away.
+        <?php else: ?>
+          Fundraiser page creation is currently disabled by an administrator. You can still register for other enabled fundraising tools.
+        <?php endif; ?>
+      </p>
 
       <form method="post" action="<?= e(base_url('register')) ?>" novalidate>
         <?= csrf_field() ?>

@@ -15,6 +15,7 @@ use App\Core\Config;
 <title><?= e($pageTitle ?? 'Redirecting') ?> | <?= e((string) Config::get('app.name', 'Almarah Foundation')) ?></title>
 <meta name="robots" content="noindex,nofollow">
 <link rel="stylesheet" href="<?= e(asset('assets/css/style.css')) ?>">
+<?php require __DIR__ . '/../partials/favicon.php'; ?>
 </head>
 <body>
 <style>

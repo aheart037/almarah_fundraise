@@ -17,6 +17,7 @@ $title = isset($pageTitle) && $pageTitle !== ''
     : $appName . ' | Fundraise for Orphan Care, Food & Education';
 $description = $metaDescription ?? (string) Config::get('app.org.tagline', '');
 $currentPath = '/' . trim(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/', '/');
+$isAuthPage = preg_match('~/(?:login|register|forgot-password|reset-password|verify-email)(?:/|$)~', $currentPath) === 1;
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -33,9 +34,9 @@ $currentPath = '/' . trim(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH
 <meta property="og:description" content="<?= e($description) ?>">
 <meta property="og:type" content="website">
 <link rel="stylesheet" href="<?= e(asset('assets/css/style.css')) ?>">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='10' fill='%23a92d63'/%3E%3Cpath d='M24 15.2c5.9 0 11.2 2.3 15.2 6.1v17.2a3 3 0 0 1-3 3H11.8a3 3 0 0 1-3-3V21.3A21.6 21.6 0 0 1 24 15.2z' fill='%23f2c200'/%3E%3C/svg%3E">
+<?php require __DIR__ . '/../partials/favicon.php'; ?>
 </head>
-<body>
+<body<?= $isAuthPage ? ' class="auth-page-body"' : '' ?>>
 
 <?php require __DIR__ . '/../partials/header.php'; ?>
 
@@ -57,7 +58,9 @@ $currentPath = '/' . trim(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH
     <a class="m-link" href="<?= e(base_url('logout')) ?>" data-method="post">Sign out</a>
   <?php else: ?>
     <a class="m-link" href="<?= e(base_url('login')) ?>">Sign in</a>
-    <a class="btn btn-gold" href="<?= e(base_url('register')) ?>">Start Your Fundraiser</a>
+    <?php if (can_fundraiser_capability('manage_pages')): ?>
+      <a class="btn btn-gold" href="<?= e(base_url('register')) ?>">Start Your Fundraiser</a>
+    <?php endif; ?>
   <?php endif; ?>
 </div>
 
