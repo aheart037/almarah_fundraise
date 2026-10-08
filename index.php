@@ -148,7 +148,7 @@ function is_database_problem(Throwable $e): bool
  * file or a setting to a stranger, so the visitor gets a short sentence and the
  * full text stays in the logs.
  */
-function report_boot_failure(Throwable $e): never
+function report_boot_failure(Throwable $e)
 {
     $detail = sprintf(
         'The site could not start: %s in %s on line %d',
