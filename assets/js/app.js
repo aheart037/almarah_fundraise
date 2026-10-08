@@ -138,8 +138,9 @@
       btn.addEventListener("click", function () {
         buttons.forEach(function (b) { b.classList.remove("active"); });
         btn.classList.add("active");
-        input.value = btn.getAttribute("data-amount");
-        if (custom) custom.value = "";
+        var amount = btn.getAttribute("data-amount");
+        input.value = amount;
+        if (custom) custom.value = amount;
         updateSummary();
       });
     });
@@ -288,6 +289,69 @@
     });
   }
 
+  /* ---------- Admin branding image previews ---------- */
+  function initBrandingPreviews() {
+    document.querySelectorAll("[data-branding-input]").forEach(function (input) {
+      var preview = document.getElementById(input.getAttribute("data-branding-preview"));
+      var fallback = document.getElementById(input.getAttribute("data-branding-fallback"));
+      var remove = document.getElementById(input.getAttribute("data-branding-remove"));
+      var currentSrc = input.getAttribute("data-current-src") || "";
+      var objectUrl = "";
+
+      if (!preview || !fallback) return;
+
+      function showFallback() {
+        preview.hidden = true;
+        fallback.hidden = false;
+      }
+
+      function releaseObjectUrl() {
+        if (objectUrl && window.URL && window.URL.revokeObjectURL) {
+          window.URL.revokeObjectURL(objectUrl);
+        }
+        objectUrl = "";
+      }
+
+      function showCurrent() {
+        if (currentSrc) {
+          preview.src = currentSrc;
+          preview.hidden = false;
+          fallback.hidden = true;
+        } else {
+          showFallback();
+        }
+      }
+
+      input.addEventListener("change", function () {
+        var file = input.files && input.files[0];
+        if (!file || !window.URL || !window.URL.createObjectURL) {
+          releaseObjectUrl();
+          showCurrent();
+          return;
+        }
+
+        if (remove) remove.checked = false;
+        releaseObjectUrl();
+        objectUrl = window.URL.createObjectURL(file);
+        preview.src = objectUrl;
+        preview.hidden = false;
+        fallback.hidden = true;
+      });
+
+      if (remove) {
+        remove.addEventListener("change", function () {
+          if (remove.checked) {
+            input.value = "";
+            releaseObjectUrl();
+            showFallback();
+          } else {
+            showCurrent();
+          }
+        });
+      }
+    });
+  }
+
   /* ---------- Add-another repeatable rows (impact numbers, etc.) ---------- */
   function initRepeaters() {
     document.querySelectorAll("[data-repeater-add]").forEach(function (btn) {
@@ -332,6 +396,7 @@
     initShare();
     initModals();
     initAutoSubmit();
+    initBrandingPreviews();
     initRepeaters();
     initPrint();
   });

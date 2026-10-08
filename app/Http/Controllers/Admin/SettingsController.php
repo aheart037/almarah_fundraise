@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Admin;
 
 use App\Core\Csrf;
+use App\Core\Logger;
 use App\Mail\TransportInterface;
 use App\Core\Request;
 use App\Core\Response;
@@ -16,7 +17,9 @@ use App\Mail\Mailer;
 use App\Payments\PaymentGatewayManager;
 use App\Services\AuditService;
 use App\Services\AuthService;
+use App\Services\FundraiserCapabilityService;
 use App\Services\SettingsService;
+use App\Services\UploadService;
 
 /**
  * Platform settings: gateway credentials, SMTP credentials and site options.
@@ -50,7 +53,10 @@ final class SettingsController extends Controller
         private PaymentGatewayManager $gateways,
         private MailQueue $queue,
         private Mailer $mailer,
-        private TransportInterface $transport
+        private TransportInterface $transport,
+        private UploadService $uploads,
+        private Logger $logger,
+        private FundraiserCapabilityService $fundraiserCapabilities
     ) {
         parent::__construct($view, $session, $csrf, $auth);
     }
@@ -98,6 +104,7 @@ final class SettingsController extends Controller
                 'max_minor'      => $this->settings->int('donations.max_minor', 500000000),
                 'receipts_from'  => $this->settings->get('donations.receipts_from', ''),
             ],
+            'fundraiserCapabilities' => $this->fundraiserCapabilities->all(),
             'queueStats'   => $this->queue->stats(),
             'secretKeys'   => [
                 'mail.password',
@@ -141,6 +148,115 @@ final class SettingsController extends Controller
 
         $this->flashSuccess('Site settings saved.');
         return $this->redirect('/admin/settings');
+    }
+
+    public function saveFundraiserCapabilities(Request $request): Response
+    {
+        $values = [
+            'manage_pages'    => $request->bool('manage_pages'),
+            'manage_teams'    => $request->bool('manage_teams'),
+            'publish_updates' => $request->bool('publish_updates'),
+        ];
+
+        $this->fundraiserCapabilities->save($values, (int) $this->auth->id());
+        $this->audit->log('settings.fundraiser_capabilities_updated', 'settings', 'fundraiser_capabilities', $values, (int) $this->auth->id());
+
+        $this->flashSuccess('Fundraiser capabilities saved. Changes apply immediately to all fundraiser accounts.');
+        return $this->redirect('/admin/settings#fundraiser-capabilities');
+    }
+
+    /** Save the public brand marks, keeping the current files unless replaced or reset. */
+    public function saveBranding(Request $request): Response
+    {
+        $assetSettings = [
+            'header_logo' => 'site.header_logo',
+            'footer_logo' => 'site.footer_logo',
+            'favicon'     => 'site.favicon',
+        ];
+        $previousPaths = [];
+        foreach ($assetSettings as $input => $settingKey) {
+            $previousPaths[$input] = (string) ($this->settings->get($settingKey, '') ?? '');
+        }
+
+        $changes = [];
+        $newUploads = [];
+
+        try {
+            foreach ($assetSettings as $input => $settingKey) {
+                $file = $request->file($input);
+                if ($file !== null) {
+                    if ($input === 'favicon'
+                        && strtolower(pathinfo((string) ($file['name'] ?? ''), PATHINFO_EXTENSION)) !== 'png') {
+                        throw new \InvalidArgumentException('The favicon must be a PNG image. A square image is recommended.');
+                    }
+
+                    $path = $this->uploads->storeImage($file, 'branding');
+                    $newUploads[] = $path;
+                    $changes[$settingKey] = $path;
+                    continue;
+                }
+
+                if ($request->bool('remove_' . $input)) {
+                    $changes[$settingKey] = '';
+                }
+            }
+        } catch (\InvalidArgumentException $e) {
+            foreach ($newUploads as $path) {
+                $this->uploads->delete($path);
+            }
+            $this->flashError($e->getMessage());
+            return $this->redirect('/admin/settings#branding');
+        } catch (\Throwable $e) {
+            foreach ($newUploads as $path) {
+                $this->uploads->delete($path);
+            }
+            $this->logger->error('Brand image upload failed', [
+                'exception' => get_class($e),
+                'reason'    => $e->getMessage(),
+            ]);
+            $this->flashError('One or more brand images could not be uploaded. Check the image type, size and server permissions.');
+            return $this->redirect('/admin/settings#branding');
+        }
+
+        if ($changes === []) {
+            $this->flashSuccess('Brand settings are unchanged.');
+            return $this->redirect('/admin/settings#branding');
+        }
+
+        try {
+            $this->settings->setMany($changes, (int) $this->auth->id());
+        } catch (\Throwable $e) {
+            // Leave uploaded files in place if a write may have partially
+            // succeeded, so a setting that was saved still points to a file.
+            $this->logger->error('Brand settings save failed', [
+                'fields' => array_keys($changes),
+                'reason' => $e->getMessage(),
+            ]);
+            $this->flashError('Brand settings could not be saved. Please reload the page and try again.');
+            return $this->redirect('/admin/settings#branding');
+        }
+
+        $pathsStillInUse = [];
+        foreach ($assetSettings as $input => $settingKey) {
+            $path = (string) ($changes[$settingKey] ?? $previousPaths[$input]);
+            if ($path !== '') {
+                $pathsStillInUse[$path] = true;
+            }
+        }
+        foreach ($assetSettings as $input => $settingKey) {
+            $oldPath = $previousPaths[$input];
+            $newPath = (string) ($changes[$settingKey] ?? $oldPath);
+            if ($oldPath !== '' && $oldPath !== $newPath && !isset($pathsStillInUse[$oldPath])) {
+                $this->uploads->delete($oldPath);
+            }
+        }
+
+        $this->audit->log('settings.branding_updated', 'settings', 'branding', [
+            'assets' => array_keys($changes),
+        ], (int) $this->auth->id());
+
+        $this->flashSuccess('Branding settings saved.');
+        return $this->redirect('/admin/settings#branding');
     }
 
     public function saveGateway(Request $request): Response

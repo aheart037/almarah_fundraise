@@ -39,8 +39,8 @@ return [
             'description' => 'Etisalat (UBL EPG REST) card processing via Registration + Finalization.',
             'enabled'     => (bool) Env::get('ETISALAT_ENABLED', false),
             'environment' => Env::get('ETISALAT_ENVIRONMENT', 'sandbox'),
-            'sandbox_url' => Env::get('ETISALAT_SANDBOX_URL', 'https://demo-ipg.ctdev.comtrust.ae:2443'),
-            'live_url'    => Env::get('ETISALAT_LIVE_URL', 'https://ipg.comtrust.ae:2443'),
+            'sandbox_url' => Env::get('ETISALAT_SANDBOX_URL', 'https://demo-ipg.ctdev.comtrust.ae:2443/epg/rest'),
+            'live_url'    => Env::get('ETISALAT_LIVE_URL', 'https://ipg.comtrust.ae:2443/epg/rest'),
             'customer'    => Env::get('ETISALAT_CUSTOMER', ''),
             'username'    => Env::secret('ETISALAT_USERNAME'),
             'password'    => Env::secret('ETISALAT_PASSWORD'),
@@ -50,7 +50,7 @@ return [
             'timeout'     => (int) Env::get('ETISALAT_TIMEOUT', 30),
             'allowed_hosts' => array_filter(array_map('trim', explode(',', (string) Env::get(
                 'ETISALAT_ALLOWED_HOSTS',
-                'ipg.comtrust.ae,demo-ipg.ctdev.comtrust.ae'
+                'ipg.comtrust.ae,demo-ipg.ctdev.comtrust.ae,demoipg.comtrust.ae'
             )))),
         ],
     ],

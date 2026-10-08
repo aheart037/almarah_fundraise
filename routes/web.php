@@ -49,10 +49,13 @@ return static function (Router $router): void {
     $router->get('/donate/{target}', [DonationController::class, 'form'], [], 'donate.form');
     $router->post('/donate/{target}', [DonationController::class, 'submit'], [CsrfMiddleware::class], 'donate.submit');
 
-    // Gateway return trips. Both GET (Meezan) and POST (Etisalat) land here.
+    // Meezan returns through GET. Per the EPG guide, Etisalat POSTs the
+    // TransactionID to the exact ReturnPath sent during Registration.
     $router->get('/payments/meezan/return', [PaymentController::class, 'meezanReturn'], [], 'payments.meezan.return');
     $router->post('/payments/meezan/callback', [PaymentController::class, 'meezanReturn'], [], 'payments.meezan.callback');
     $router->get('/payments/etisalat/return', [PaymentController::class, 'etisalatReturn'], [], 'payments.etisalat.return');
+    $router->post('/payments/etisalat/return', [PaymentController::class, 'etisalatReturn'], [], 'payments.etisalat.return.post');
+    // Retain this alias for any existing merchant configuration using /callback.
     $router->post('/payments/etisalat/callback', [PaymentController::class, 'etisalatReturn'], [], 'payments.etisalat.callback');
 
     // Internal hosted-form bridge: auto-POSTs the stored TransactionID.

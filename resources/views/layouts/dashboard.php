@@ -14,6 +14,7 @@ $title = isset($pageTitle) && $pageTitle !== '' ? $pageTitle . ' | Dashboard' : 
 $path = '/' . trim(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/', '/');
 $is = static fn (string $prefix): string => str_starts_with($path, $prefix) && ($prefix !== '/dashboard' || $path === '/dashboard') ? 'active' : '';
 $fullName = trim((string) ($authUser['first_name'] ?? '') . ' ' . (string) ($authUser['last_name'] ?? ''));
+$canManageTeams = can_fundraiser_capability('manage_teams');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -24,7 +25,7 @@ $fullName = trim((string) ($authUser['first_name'] ?? '') . ' ' . (string) ($aut
 <meta name="robots" content="noindex,nofollow">
 <meta name="csrf-token" content="<?= e(csrf_token()) ?>">
 <link rel="stylesheet" href="<?= e(asset('assets/css/style.css')) ?>">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='10' fill='%23a92d63'/%3E%3Cpath d='M24 15.2c5.9 0 11.2 2.3 15.2 6.1v17.2a3 3 0 0 1-3 3H11.8a3 3 0 0 1-3-3V21.3A21.6 21.6 0 0 1 24 15.2z' fill='%23f2c200'/%3E%3C/svg%3E">
+<?php require __DIR__ . '/../partials/favicon.php'; ?>
 </head>
 <body class="dash-body">
 
@@ -52,10 +53,12 @@ $fullName = trim((string) ($authUser['first_name'] ?? '') . ' ' . (string) ($aut
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
           My fundraisers
         </a>
-        <a href="<?= e(base_url('dashboard/teams')) ?>" class="<?= $is('/dashboard/teams') ?>">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-          My teams
-        </a>
+        <?php if ($canManageTeams): ?>
+          <a href="<?= e(base_url('dashboard/teams')) ?>" class="<?= $is('/dashboard/teams') ?>">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            My teams
+          </a>
+        <?php endif; ?>
         <hr>
         <a href="<?= e(base_url('dashboard/profile')) ?>" class="<?= $is('/dashboard/profile') ?>">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -88,7 +91,7 @@ $fullName = trim((string) ($authUser['first_name'] ?? '') . ' ' . (string) ($aut
 <div class="mobile-panel" id="mobilePanel">
   <a class="m-link" href="<?= e(base_url('dashboard')) ?>">Overview</a>
   <a class="m-link" href="<?= e(base_url('dashboard/fundraisers')) ?>">My fundraisers</a>
-  <a class="m-link" href="<?= e(base_url('dashboard/teams')) ?>">My teams</a>
+  <?php if ($canManageTeams): ?><a class="m-link" href="<?= e(base_url('dashboard/teams')) ?>">My teams</a><?php endif; ?>
   <a class="m-link" href="<?= e(base_url('dashboard/profile')) ?>">Profile</a>
   <a class="m-link" href="<?= e(base_url('dashboard/security')) ?>">Password &amp; security</a>
   <a class="m-link" href="<?= e(base_url('logout')) ?>">Sign out</a>

@@ -174,7 +174,7 @@ final class EtisalatGateway implements PaymentGatewayInterface
             postFields: [],
             providerCode: $code,
             providerMessage: $message,
-            safeResponse: $this->safeSubset($body, ['Response', 'TransactionID', 'UniqueID', 'OrderID', 'Amount', 'Currency'])
+            safeResponse: $this->safeSubset($body, ['ResponseCode', 'ResponseDescription', 'TransactionID', 'UniqueID', 'OrderID', 'Amount', 'Currency'])
         );
     }
 
@@ -331,9 +331,13 @@ final class EtisalatGateway implements PaymentGatewayInterface
         $status = $this->statusMapper->mapEtisalat($code);
 
         $providerAmountMinor = null;
-        if (isset($body['Amount']) && is_numeric($body['Amount'])) {
+        $providerAmount = $body['Amount'] ?? null;
+        if (is_array($providerAmount)) {
+            $providerAmount = $providerAmount['Value'] ?? $providerAmount['value'] ?? null;
+        }
+        if ($providerAmount !== null && is_numeric($providerAmount)) {
             try {
-                $providerAmountMinor = Money::fromProviderString((string) $body['Amount']);
+                $providerAmountMinor = Money::fromProviderString((string) $providerAmount);
             } catch (\Throwable $e) {
                 $providerAmountMinor = null;
             }
@@ -343,7 +347,7 @@ final class EtisalatGateway implements PaymentGatewayInterface
         $providerOrderId = isset($body['OrderID']) ? (string) $body['OrderID'] : null;
         $returnedTxn = isset($body['TransactionID']) ? (string) $body['TransactionID'] : null;
 
-        $safe = $this->safeSubset($body, ['Response', 'TransactionID', 'OrderID', 'Amount', 'Currency', 'Description']);
+        $safe = $this->safeSubset($body, ['ResponseCode', 'ResponseDescription', 'TransactionID', 'OrderID', 'Amount', 'Currency', 'Description']);
 
         // A finalization that reports a different transaction must never be
         // applied to our record.
@@ -465,7 +469,7 @@ final class EtisalatGateway implements PaymentGatewayInterface
             providerCode: $code,
             providerMessage: $extracted['message'],
             amountMinor: $amountMinor,
-            safeResponse: $this->safeSubset($extracted['block'], ['Response', 'TransactionID', 'Amount', 'Description'])
+            safeResponse: $this->safeSubset($extracted['block'], ['ResponseCode', 'ResponseDescription', 'TransactionID', 'Amount', 'Description'])
         );
     }
 

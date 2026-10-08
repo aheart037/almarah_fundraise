@@ -130,7 +130,9 @@ $icons = [
       <div class="cta-actions">
         <?php if ($status === 'completed'): ?>
           <a class="btn btn-brand" href="<?= e(base_url('fundraisers')) ?>">Help another fundraiser</a>
-          <a class="btn btn-outline-brand" href="<?= e(base_url('register')) ?>">Start your own</a>
+          <?php if (can_fundraiser_capability('manage_pages')): ?>
+            <a class="btn btn-outline-brand" href="<?= e(base_url('register')) ?>">Start your own</a>
+          <?php endif; ?>
         <?php else: ?>
           <a class="btn btn-brand" href="<?= e(base_url('fundraisers')) ?>">Try again</a>
           <a class="btn btn-outline-brand" href="<?= e(base_url('support')) ?>">Get help with this payment</a>

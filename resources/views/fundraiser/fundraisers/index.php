@@ -4,13 +4,17 @@
  *
  * @var array $fundraisers
  */
+$canManagePages = can_fundraiser_capability('manage_pages');
+$canPublishUpdates = can_fundraiser_capability('publish_updates');
 ?>
 <div class="dash-head">
   <div>
     <h1>My fundraisers</h1>
     <p class="sub">Everything you have created, in every state.</p>
   </div>
-  <a class="btn btn-brand" href="<?= e(base_url('dashboard/fundraisers/create')) ?>">Start a fundraiser</a>
+  <?php if ($canManagePages): ?>
+    <a class="btn btn-brand" href="<?= e(base_url('dashboard/fundraisers/create')) ?>">Start a fundraiser</a>
+  <?php endif; ?>
 </div>
 
 <?php if ($fundraisers === []): ?>
@@ -18,8 +22,12 @@
     <div class="empty-state">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
       <h3>You have not started a fundraiser yet</h3>
-      <p>Tell your story, set a goal and share it. Our team reviews every page before it goes live.</p>
-      <a class="btn btn-brand" href="<?= e(base_url('dashboard/fundraisers/create')) ?>">Start your first fundraiser</a>
+      <?php if ($canManagePages): ?>
+        <p>Tell your story, set a goal and share it. Our team reviews every page before it goes live.</p>
+        <a class="btn btn-brand" href="<?= e(base_url('dashboard/fundraisers/create')) ?>">Start your first fundraiser</a>
+      <?php else: ?>
+        <p>Fundraiser page creation is currently disabled by an administrator.</p>
+      <?php endif; ?>
     </div>
   </div>
 <?php else: ?>
@@ -74,16 +82,18 @@
                   <?php if ($status === 'published'): ?>
                     <a class="btn btn-light btn-sm" href="<?= e(base_url('fundraisers/' . (string) $row['slug'])) ?>">View</a>
                   <?php endif; ?>
-                  <a class="btn btn-outline-brand btn-sm" href="<?= e(base_url('dashboard/fundraisers/' . $id . '/edit')) ?>">Edit</a>
+                  <?php if ($canManagePages): ?>
+                    <a class="btn btn-outline-brand btn-sm" href="<?= e(base_url('dashboard/fundraisers/' . $id . '/edit')) ?>">Edit</a>
+                  <?php endif; ?>
                   <a class="btn btn-light btn-sm" href="<?= e(base_url('dashboard/fundraisers/' . $id . '/donations')) ?>">Donations</a>
-                  <a class="btn btn-light btn-sm" href="<?= e(base_url('dashboard/fundraisers/' . $id . '/updates')) ?>">Updates</a>
-                  <?php if (in_array($status, ['draft', 'changes_requested'], true)): ?>
+                  <a class="btn btn-light btn-sm" href="<?= e(base_url('dashboard/fundraisers/' . $id . '/updates')) ?>"><?= $canPublishUpdates ? 'Updates' : 'View updates' ?></a>
+                  <?php if ($canManagePages && in_array($status, ['draft', 'changes_requested'], true)): ?>
                     <form method="post" action="<?= e(base_url('dashboard/fundraisers/' . $id . '/submit')) ?>" data-confirm="Submit this fundraiser for review?">
                       <?= csrf_field() ?>
                       <button class="btn btn-brand btn-sm" type="submit">Submit</button>
                     </form>
                   <?php endif; ?>
-                  <?php if ($status === 'published'): ?>
+                  <?php if ($canManagePages && $status === 'published'): ?>
                     <form method="post" action="<?= e(base_url('dashboard/fundraisers/' . $id . '/pause')) ?>" data-confirm="Pause this fundraiser? It will stop accepting donations.">
                       <?= csrf_field() ?>
                       <button class="btn btn-light btn-sm" type="submit">Pause</button>
