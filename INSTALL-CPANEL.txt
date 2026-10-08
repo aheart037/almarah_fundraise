@@ -1,0 +1,1319 @@
+================================================================================
+ALMARAH FOUNDATION — FUNDRAISING & DONATION PLATFORM
+INSTALLATION GUIDE FOR cPANEL / SHARED HOSTING
+================================================================================
+Target      : Shared hosting with cPanel (HostGator, Namecheap, GoDaddy,
+              Hostinger, Plesk-style panels, greengeeks, cPanel on a VPS, ...)
+Companion   : INSTALL.txt — the full server guide (Apache/Nginx, cron, systemd,
+              production hardening). Read it for the parts that do not change.
+Document    : INSTALL-CPANEL.txt
+
+WHAT IS DIFFERENT ON SHARED HOSTING
+  * You have no root and no sudo. Everything happens inside your account.
+  * The document root is public_html and it cannot be moved. The site is
+    therefore installed INTO a folder the web serves (public_html itself, or a
+    folder of it such as public_html/donate).
+  * The site is one self-contained folder: the pages, the styling, the
+    uploaded images and the application code live in that one place, and the
+    private half of it is closed to the web by .htaccess rules that ship with
+    it (section 2, and section 9 for how to verify that in one click).
+  * No systemd. Long-running workers are not allowed; cron is the only
+    scheduler, configured in cPanel.
+  * PHP version and extensions are chosen in cPanel, not in php.ini.
+  * Composer may not exist. You can install dependencies on your own computer
+    and upload them (the ready-made package already includes them).
+  * Database names and users are prefixed with your cPanel account name
+    (e.g. almarf1_almarah_platform). This trips up nearly everyone.
+
+--------------------------------------------------------------------------------
+JUST WANT IT RUNNING? READ START-HERE.TXT INSTEAD.
+--------------------------------------------------------------------------------
+START-HERE.txt is a one-page version: move the folder into place, put four
+values in config.php, click "Install my site". It is enough for a normal cPanel
+account and it is the recommended starting point.
+
+This document is the detailed reference for when you want to understand what is
+happening, deploy behind a reverse proxy, add the payment gateways, tune
+permissions, or fix something that did not work. Read section 2 for the layout,
+then follow sections 3 to 12 in order. Section 13 is the verification checklist.
+Section 15 is troubleshooting.
+
+--------------------------------------------------------------------------------
+CONTENTS
+--------------------------------------------------------------------------------
+ 1. Before you start (what you need from your host)
+ 2. The layout: one folder, served directly
+ 3. Step 1 — PHP version and extensions
+ 4. Step 2 — Create the database and database user
+ 5. Step 3 — Upload the folder and put it in place
+ 6. Step 4 — Dependencies (Composer, or upload vendor/)
+ 7. Step 5 — Tell the site about your database (config.php)
+ 8. Step 6 — Install in your browser at /setup
+ 9. Step 7 — Verify the folder is closed to the web
+10. Step 8 — Static assets and uploads (already in place)
+11. Step 9 — HTTPS, cron jobs and email
+12. Step 10 — Set permissions
+13. Verification checklist
+14. Updating the application on cPanel
+15. Troubleshooting
+16. Backups on cPanel
+17. Security notes for shared hosting
+
+
+================================================================================
+1. BEFORE YOU START (WHAT YOU NEED FROM YOUR HOST)
+================================================================================
+Collect these before you begin:
+
+  [ ] cPanel login for the account.
+  [ ] The account's absolute home path. cPanel > File Manager shows it, or
+      cPanel > Terminal:  echo $HOME
+      Usually /home/USERNAME, /home2/USERNAME or /home3/USERNAME.
+  [ ] The cPanel account name (shown top-right of cPanel, e.g. "almarf1").
+      Database names and users will be prefixed with it.
+  [ ] PHP 8.2 or newer selectable in cPanel > MultiPHP Manager. If the highest
+      version offered is 8.1, ask support to enable 8.2+ or move to another
+      host — the platform requires it.
+  [ ] A decision on where the site goes: the whole domain, or a folder of it
+      such as https://yourdomain.com/donate.
+  [ ] .htaccess support (see below).
+
+1.1 About .htaccess — one question worth asking
+
+  Everything private in the site's folder (the database password in config.php,
+  the encryption key in storage/app/, the application code) is protected by
+  .htaccess rules that are part of the package, and each private folder carries
+  its own blanket refusal as well. On cPanel that works out of the box: Apache,
+  LiteSpeed and CloudLinux all read .htaccess for you by default.
+
+  What must NOT be switched off is Apache's "AllowOverride" for your document
+  root. If your host has disabled it, the site's pages would not route at all
+  (only the home page would open) and config.php would become downloadable — so
+  you would notice immediately. Section 9 verifies it in one click, and section
+  17 has the wording to send your host plus a fallback layout for that case.
+
+  Ask support up front if you want certainty:
+
+    "Is AllowOverride enabled (All) for /home/USER/public_html? Does the
+     server follow .htaccess rewrites and Require rules?"
+
+1.2 What you do NOT need
+
+  * No symlinks. Nothing has to be linked or copied between folders.
+  * No SSH, no Composer, no command line, no cron job to install.
+  * No key or licence file: the installer at /setup asks for nothing but your
+    own name, email address and a password (section 8).
+
+
+================================================================================
+2. THE LAYOUT: ONE FOLDER, SERVED DIRECTLY
+================================================================================
+The site is one folder, and that folder IS the folder the web server serves:
+its files sit directly in public_html (whole domain) or in a folder of it such
+as public_html/donate. There is no second folder, no launcher to copy and no
+symlink.
+
+  /home/USERNAME/public_html/              whole domain
+  /home/USERNAME/public_html/donate/       subfolder install
+
+and inside it:
+
+  index.php            the only PHP file a visitor may run
+  .htaccess            sends every address to index.php, refuses private files
+  config.php           YOUR database name, user and password        (private)
+  .env.example         optional advanced configuration                (private)
+
+  assets/              css, js and images — public, served as files
+  uploads/             fundraiser images, written by the application  (public
+                       to read, never executable: uploads/.htaccess)
+
+  app/                 the application code                          (private)
+  bootstrap/  config/  database/  resources/  routes/                   (private)
+  bin/  deploy/  storage/  vendor/                                      (private)
+  storage/app/app-key.txt    the key that decrypts stored gateway and SMTP
+                             passwords                                   (private)
+  storage/logs/              request and error history                   (private)
+  database/migrations/*.sql  the full schema                             (private)
+
+  composer.json  composer.lock  INSTALL.txt  INSTALL-CPANEL.txt  START-HERE.txt
+
+Note the two halves. The browser needs index.php, assets/ and uploads/. Nothing
+else in this list may be readable by a visitor — and it is not, because every
+private name above is refused three times over:
+
+  1. the main .htaccess refuses the private folders by name (app, bin,
+     bootstrap, config, database, deploy, resources, routes, storage, tests,
+     vendor) and the private file types (.sql, .log, .md, .txt, .json, .lock,
+     .ini, …) anywhere in the folder;
+  2. each private folder carries its own .htaccess that refuses everything, so
+     the protection does not depend on the main file being read;
+  3. config.php and .htaccess are additionally refused by name, and dot-files
+     (.env, .git) are refused as a class.
+
+A URL that matches nothing is handed to index.php, which is how pages like
+https://yourdomain.com/donate/fundraisers work.
+
+A SUBFOLDER INSTALL is the same thing one level down. Nothing about the site
+changes; you name the folder once, in config.php:
+
+    'site_url' => 'https://yourdomain.com/donate',
+
+and every link, redirect and payment return URL follows automatically.
+
+--------------------------------------------------------------------------------
+WHY THE PAGES AND THE CODE SHARE A FOLDER
+--------------------------------------------------------------------------------
+Because it is the one layout that needs no second folder, no symlink, no
+copy step and no path setting — you move one folder and edit one file. The
+trade-off is that the protection is .htaccess rather than "outside the document
+root", so it is worth being explicit about what that means:
+
+  * Apache honours .htaccess by default on cPanel, and section 9 makes you
+    confirm it before you go live (one click: open your own config.php URL and
+    read the response; it must say 403 Forbidden).
+  * The package never relies on a single file: the private folders refuse
+    everything themselves, and their own .htaccess travels with them.
+  * The application does not need to write anywhere the browser can reach
+    except uploads/, which accepts images only and refuses to execute them.
+
+  A verified example, from a real deployment of this code: with the folder
+  served at https://example.com/donate, these URLs answer 403 or 404 —
+
+      /donate/config.php
+      /donate/app/Core/Database.php
+      /donate/storage/app/app-key.txt
+      /donate/database/migrations/0001_core_auth.sql
+      /donate/uploads/x.php
+
+  If any of them returns content instead, stop and read section 17.
+
+--------------------------------------------------------------------------------
+IS THERE AN ALTERNATIVE FOR HOSTS THAT IGNORE .htaccess?
+--------------------------------------------------------------------------------
+Yes, and it is documented in section 17.4: you keep the application BESIDE
+public_html (where no URL can reach it) and use the 'public_path' setting to
+tell the site which folder is served. It costs one setting and one extra move;
+it is the right answer only for a host that refuses to enable AllowOverride.
+On cPanel this is rare — .htaccess is the standard mechanism the panel itself
+relies on (password-protected directories, redirects, PHP settings).
+
+
+================================================================================
+3. STEP 1 — PHP VERSION AND EXTENSIONS
+================================================================================
+3.1 Set the PHP version
+
+  cPanel > Software > MultiPHP Manager
+    - select your domain in the list
+    - choose PHP 8.2, 8.3 or 8.4 (8.3 recommended)
+    - Apply
+
+  If your panel shows "Select PHP Version" instead (older cPanel / CloudLinux),
+  the same choice lives there.
+
+3.2 Enable the required extensions
+
+  cPanel > Software > Select PHP Version > Extensions (CloudLinux hosts)
+  or cPanel > MultiPHP INI Editor (for settings) — on some hosts extensions are
+  enabled by support only.
+
+Required (tick them; many are on by default):
+
+  pdo_mysql   database access            json       required by the framework
+  mbstring    text handling              openssl    encryption, HTTPS calls
+  curl        payment gateway calls      fileinfo   upload MIME checks
+  ctype       validation                 filter     validation
+  hash        password hashing           session    sign-in
+  iconv       text conversion            gd         image resizing (recommended)
+
+3.3 PHP settings
+
+  cPanel > Software > MultiPHP INI Editor > select your domain:
+
+    display_errors      Off          (never show errors to the public)
+    log_errors          On
+    memory_limit        256M
+    upload_max_filesize 4M
+    post_max_size       8M
+    max_execution_time  60
+    allow_url_fopen     Off          (the app does not need it)
+    session.cookie_httponly On
+    session.cookie_samesite Lax
+
+  If you cannot edit these directly, ask support to set them for your domain,
+  or add them to the .htaccess in the site folder as a last resort:
+
+    php_flag display_errors off
+    php_value memory_limit 256M
+    php_value upload_max_filesize 4M
+    php_value post_max_size 8M
+
+  Note: php_flag/php_value lines cause a 500 error if the host runs PHP as
+  suPHP/CGI rather than as an Apache module. If that happens, remove them and
+  use MultiPHP INI Editor instead. This is the single most common cause of a
+  cPanel site showing 500 on every page after an edit. The package ships
+  without those lines on purpose.
+
+
+================================================================================
+4. STEP 2 — CREATE THE DATABASE AND DATABASE USER
+================================================================================
+  cPanel > Databases > MySQL Databases
+
+  1. Create a database. Enter: almarah_platform
+     cPanel creates it as:  almarf1_almarah_platform
+     (the prefix is your cPanel account name and CANNOT be removed)
+
+  2. Create a user. Username: almarah
+     cPanel creates it as:  almarf1_almarah
+     Password: use the built-in generator, 20+ characters. Copy it — you need
+     it in a moment and it is not shown again.
+
+  3. Add the user to the database:
+       "Add user to database" -> select the user, select the database,
+       ALL PRIVILEGES -> Make changes.
+
+  Write down the THREE prefixed values — the full database name, the full user
+  name, and the password:
+
+    db_name = almarf1_almarah_platform
+    db_user = almarf1_almarah
+    db_pass = <the generated password>
+
+  Host stays 127.0.0.1 on virtually every shared host (some use localhost;
+  if 127.0.0.1 fails with "connection refused", try localhost). The default in
+  config.php is 'localhost', which is right for most cPanel servers — the setup
+  page tells you if it is not.
+
+  Do not use the cPanel account password for the database. Do not reuse the
+  database password anywhere else.
+
+
+================================================================================
+5. STEP 3 — UPLOAD THE FOLDER AND PUT IT IN PLACE
+================================================================================
+5.1 Get the package
+
+  If you were given almarah-platform-cpanel.zip, it already contains the
+  application, the dependencies (vendor/), the styling and images (assets/),
+  an empty hardened uploads/ and every .htaccess. Skip to 5.2.
+
+  To build it yourself from the project directory on your machine:
+
+    # production dependencies only, then run the packaging script
+    bash deploy/build-package.sh /tmp/almarah-platform-cpanel.zip
+
+  The script copies the project to a temporary directory, runs
+  `composer install --no-dev --optimize-autoloader` there, strips tests/,
+  .env, storage/app/*, storage/logs/* and phpunit.xml, and zips the result as
+  one folder named almarah-platform/ plus START-HERE.txt.
+
+  Keep vendor/ IN the archive (a shared host may have no Composer) and keep
+  tests/ OUT (development only).
+
+  The storage/app/* exclusion matters: that directory holds the build
+  machine's own app-key.txt and installed.lock. Shipping them would make the
+  new site claim it was already installed, and would give two different sites
+  the same encryption key. The application recreates the directory and its
+  contents on the first page load, so excluding it is safe.
+
+5.2 Upload and extract
+
+  cPanel > Files > File Manager
+
+    - Click "Home" in the left-hand tree. You are in /home/USERNAME — the
+      folder ABOVE public_html, not inside it.
+    - Click Upload, choose almarah-platform-cpanel.zip, wait for it to finish.
+    - Go back to /home/USERNAME, right-click the zip > Extract.
+    - Confirm the result: /home/USERNAME/almarah-platform/app/ must exist.
+    - Delete the .zip file after extracting.
+
+  Extracting in your home folder first is deliberate: your home folder is not
+  served as a website, so a mistake there costs nothing and you can see exactly
+  what arrived.
+
+5.3 Put the folder where the site is served from
+
+  The site's files must sit DIRECTLY in the folder your site is served from —
+  one level deeper and your pages are at the wrong address. Decide which folder
+  that is:
+
+    (A) the whole domain         /home/USERNAME/public_html
+    (B) a folder of the domain   /home/USERNAME/public_html/donate
+                                 (create "donate" with Create Folder first)
+
+  Case (B) — a subfolder install, the usual choice when public_html already
+  serves something else:
+
+    - In File Manager, open /home/USERNAME/public_html and create "donate"
+    - Go back up to /home/USERNAME, select the almarah-platform folder, choose
+      Move, and move it into /home/USERNAME/public_html/donate
+    - Select it again, choose Rename, and call it "donate"
+
+    The folder is now the folder being served: /home/USERNAME/public_html/donate
+    holds index.php, assets/, uploads/, config.php, app/ and so on. Nothing was
+    copied out of anything.
+
+  Case (A) — the whole domain:
+
+    - Open the almarah-platform folder, select everything in it (Ctrl+A),
+      choose Move, and move it into /home/USERNAME/public_html
+    - Delete the now-empty almarah-platform folder
+
+  If you instead ended up with the site one level too deep (served at
+  .../donate/almarah-platform/), fix it in one step: open the inner folder,
+  select everything (Ctrl+A), Move it up into the folder you are standing in,
+  then delete the empty inner folder.
+
+5.4 Check what arrived
+
+  Turn on File Manager's "Show Hidden Files" (Settings, top right) and confirm
+  the folder contains at least:
+
+    index.php        .htaccess        config.php
+    assets/          uploads/         app/  bin/  bootstrap/  config/
+    database/  resources/  routes/  storage/  vendor/
+    composer.json  INSTALL.txt  INSTALL-CPANEL.txt  START-HERE.txt
+
+  If asset or uploads are missing, the upload was interrupted: extract the
+  archive again and move the folder over the existing one, choosing
+  "Overwrite".
+
+5.5 Remove the host's placeholder page
+
+  If the folder already contains the host's index.html / default.php
+  "site under construction" page, delete it, or it may be served instead of
+  index.php depending on the DirectoryIndex order.
+
+5.6 A note on File Manager and dot-files
+
+  A few File Manager versions do not copy dot-files (names starting with a dot)
+  when you copy a folder between directories. Moving a folder is a rename and
+  is not affected; copying is. If you copied rather than moved, open app/,
+  config/, database/, storage/, vendor/ and check that each contains a
+  .htaccess. The setup page checks this too and reports it in red (section 8).
+
+
+================================================================================
+6. STEP 4 — DEPENDENCIES (COMPOSER, OR UPLOAD vendor/)
+================================================================================
+The application needs the vendor/ directory: the autoloader and the PHPMailer
+library. The ready-made package already contains it. If you are assembling the
+folder yourself, three ways to get it, in order of preference.
+
+OPTION A — cPanel Terminal (fastest, if available)
+
+  cPanel > Advanced > Terminal
+
+    cd ~/almarah-platform
+    composer install --no-dev --optimize-autoloader
+
+  If composer is not installed, check where cPanel hides it:
+
+    ls /usr/local/bin/composer /opt/cpanel/composer/bin/composer 2>/dev/null
+    # or use the cPanel "Setup PHP Composer" tool (Software > Setup Composer)
+
+  A cPanel "Composer" tool, if your host has one, expects a composer.json in the
+  folder you point it at.
+
+OPTION B — Build on your computer and upload vendor/ (works everywhere)
+
+  1. On your computer, in the project directory:
+       composer install --no-dev --optimize-autoloader
+  2. Zip the vendor/ directory and upload it to the site folder in File
+     Manager, then extract it there.
+  3. Verify: <site folder>/vendor/autoload.php exists.
+
+  This produces the correct vendor/ because PHP dependencies are plain files —
+  no compiling, no architecture-specific binaries for this project.
+
+OPTION C — Ask support to install Composer for your account, then use Option A.
+
+Whichever you use, confirm the autoloader is present before continuing:
+
+  <site folder>/vendor/autoload.php          <- must exist
+  <site folder>/vendor/phpmailer/phpmailer/  <- must exist
+
+Do NOT upload vendor/ from a different PHP version's build if that vendor was
+produced with dev dependencies that clash; --no-dev is what you want.
+
+
+================================================================================
+7. STEP 5 — TELL THE SITE ABOUT YOUR DATABASE (config.php)
+================================================================================
+One file, three lines (four in a subfolder). This is the only file you edit to
+configure the site.
+
+7.1 Open it
+
+  cPanel > File Manager > the folder you installed into (public_html, or
+  public_html/donate)
+
+    - Right-click config.php > Edit   (the cPanel code editor opens)
+    - Leave it where it is: it belongs in the folder that is served, next to
+      index.php
+
+7.2 Fill in the three values
+
+  These are the values you created in section 4, and they must be the FULL names
+  including the cPanel prefix:
+
+    'db_name' => 'almarf1_almarah_platform',
+    'db_user' => 'almarf1_almarah',
+    'db_pass' => 'the password from section 4',
+
+  Save the file. That is the whole configuration.
+
+7.3 Three optional lines
+
+  All three can stay exactly as they are:
+
+    'site_url'    => 'https://yourdomain.com',      # the address used in emails
+                                                    # and payment return URLs.
+                                                    # In a subfolder include it:
+                                                    # .../donate
+                                                    # empty means "detect it"
+    'public_path' => '',                            # a folder on the server,
+                                                    # only for unusual hosting
+                                                    # (section 17.4). NEVER a web
+                                                    # address. Leave empty here.
+    'setup_lock'  => '',                            # leave empty: the setup
+                                                    # page asks for no key at
+                                                    # all. A word here makes it
+                                                    # ask for that word, which
+                                                    # is only useful if the site
+                                                    # is already public and you
+                                                    # cannot install immediately
+                                                    # (section 8.2).
+
+7.4 What the application creates for itself
+
+  You do not have to create, generate or chmod any of these by hand:
+
+    storage/app/app-key.txt      encryption key for stored gateway and SMTP
+                                 passwords; generated on the first page load
+                                 and written with mode 0600
+    storage/app/installed.lock   written when installation finishes
+    storage/{logs,app,cache,uploads} and uploads/
+                                 recreated automatically when missing - empty
+                                 directories do not survive most uploads
+
+7.5 About .env (optional)
+
+  .env.example is shipped for advanced setups: a separate staging server,
+  container environment variables, or a host that injects configuration.
+  On cPanel you do not need a .env file at all.
+
+  If you do create one, the order of precedence is:
+
+    real environment variables  >  config.php  >  .env
+
+  config.php always wins over .env. Use .env only for settings config.php
+  deliberately does not hold (mail transport details, gateway enable flags,
+  session cookie options).
+
+
+================================================================================
+8. STEP 6 — INSTALL IN YOUR BROWSER AT /setup
+================================================================================
+With config.php filled in, the schema, the reference data and your admin account
+are a few clicks away. No Terminal, no Composer, no commands, and nothing to
+copy out of a file: the form asks for your name, your email address and a
+password, and that is the whole installation.
+
+8.1 Open the installer
+
+  https://yourdomain.com/setup
+  (in a folder:  https://yourdomain.com/donate/setup)
+
+  The page opens with a checklist and every line must be green:
+
+    - PHP 8.2+ and the extensions pdo_mysql, mbstring, openssl, curl, fileinfo
+    - config.php filled in, and the database reachable
+    - the storage paths writable
+    - "Private files: closed" — the rules that refuse config.php and the
+      application code are in place, with a link you can open to prove your
+      host applies them (section 9)
+    - the stylesheet and images found where the browser asks for them
+
+  A red line tells you what to change. Database errors are translated:
+
+    1045  wrong db_user or db_pass in config.php (check the cPanel prefix)
+    1044  the user exists but was never added to the database
+    1049  wrong db_name, or the database was never created
+    2002  try db_host 'localhost' instead of '127.0.0.1', or the other way round
+
+8.2 The installation window, and the optional lock word
+
+  The installer runs only while the database has no administrator and no lock
+  file exists, and it closes itself for good the moment it succeeds. There is
+  therefore no key file to fetch, keep or lose — but there is a short window,
+  between putting the files on the server and pressing the button, in which
+  anyone who reaches /setup could create the administrator account instead of
+  you. Install as soon as the checklist is green.
+
+  If you cannot, type any word of your own into 'setup_lock' in config.php
+  first:
+
+      'setup_lock' => 'almond',
+
+  The setup form then carries one extra field and that word is required before
+  anything is installed. Empty the line afterwards and it is never asked for
+  again; forgetting the word costs nothing, because emptying the line removes
+  the lock.
+
+8.3 Create your administrator
+
+  Enter your first name, last name, email address and a password of at least 10
+  characters containing a letter and a digit. Press "Install my site".
+
+  That one click:
+    - creates all 32 tables and the reporting views
+    - loads reference data only - roles, categories, gateways, 23 email
+      templates, FAQs, settings, terms and privacy text - and no demo
+      fundraisers or donations
+    - creates your account as a verified super administrator
+    - writes storage/app/installed.lock, which is what closes /setup
+
+  Sign in at https://yourdomain.com/login with that email and password.
+
+8.4 The installer switches itself off
+
+  Visiting /setup afterwards shows "Already installed". It will not run a second
+  time, even if someone deletes the lock file, as long as an administrator
+  account exists. To start over: drop the database's tables and views in
+  phpMyAdmin, delete storage/app/installed.lock, and open /setup again - the
+  installer rebuilds everything from scratch.
+
+8.5 If you prefer the command line, or /setup is blocked
+
+  cPanel > Advanced > Terminal:
+
+    cd /home/USERNAME/public_html/donate        # the folder you installed into
+    php bin/console migrate           # creates the tables and views
+    php bin/console db:seed           # reference data only (no demo content)
+    php bin/console make:admin        # asks for email + password
+
+  The same password rules apply (10 characters, a letter and a digit, entered
+  hidden). make:admin also writes installed.lock, so /setup will then report
+  "Already installed" - that is correct behaviour, not a fault.
+
+  Without Terminal, use cPanel > Advanced > Cron Jobs > "Run Now" for each
+  command. make:admin is interactive, so pass the values as environment
+  variables instead:
+
+    cd /home/USERNAME/public_html/donate && ADMIN_EMAIL=admin@yourdomain.com \
+      ADMIN_PASSWORD='a-strong-passphrase-with-digits' \
+      ADMIN_FIRST_NAME=Almarah ADMIN_LAST_NAME=Admin \
+      /usr/local/bin/php bin/console make:admin
+
+  Delete the temporary cron entries afterwards. Leaving a make:admin job in the
+  scheduler is a security hole.
+
+8.6 Finding the right PHP binary for cron
+
+  In cPanel Terminal:  which php
+  Typical answers:
+    /usr/local/bin/php                         (host default PHP)
+    /opt/cpanel/ea-php83/root/usr/bin/php      (a specific version)
+    /usr/local/bin/ea-php83                    (CloudLinux alias)
+
+  Use that full path in cron. Bare `php` frequently resolves to an old version
+  in the cron environment, which produces syntax errors on PHP 8 code.
+
+8.7 If a command reports "Could not open input file: bin/console"
+
+  You are in the wrong directory, or the folder is nested one level deeper than
+  you think. Check with:
+    ls ~/public_html/donate/bin/console
+
+
+================================================================================
+9. STEP 7 — VERIFY THE FOLDER IS CLOSED TO THE WEB
+================================================================================
+This is the one manual check worth doing before you announce the site. It takes
+a minute and it is the difference between "my database password is private" and
+"my database password is one guessed URL away".
+
+  In your browser, open your own config.php:
+
+      https://yourdomain.com/donate/config.php
+
+  EXPECTED:  403 Forbidden   (or 404 Not Found on some hosts)
+
+  NOT ACCEPTABLE: the file's contents, a download prompt, or a blank page.
+  If you see content, Apache is not applying .htaccess for this folder. That is
+  a host setting ("AllowOverride") and not something the package can change from
+  inside; send your host the text in section 17.2, or use the alternative layout
+  in section 17.4 while you wait.
+
+  Repeat for a few more, all of which must be 403/404:
+
+      /donate/.htaccess
+      /donate/app/Core/Database.php
+      /donate/storage/app/app-key.txt
+      /donate/database/migrations/0001_core_auth.sql
+      /donate/vendor/autoload.php
+
+  And confirm these two are 200 (they are meant to be public):
+
+      /donate/assets/css/style.css
+      /donate/assets/img/hero.jpg
+
+  In cPanel Terminal, the same check in one line each:
+
+    curl -s -o /dev/null -w '%{http_code}\n' https://yourdomain.com/donate/config.php
+    curl -s -o /dev/null -w '%{http_code}\n' https://yourdomain.com/donate/assets/css/style.css
+
+9.1 If you need to add PHP settings
+
+  The .htaccess in the site folder is where host-specific PHP settings belong if
+  MultiPHP INI Editor is unavailable (section 3.3). Add them at the END of the
+  file so the routing and refusal rules keep working, and remove any php_flag /
+  php_value line that makes the site return 500 (see section 3.3).
+
+9.2 What NOT to put in that folder
+
+  Do not add: database dumps (.sql), backups of any kind, notes (.txt, .md),
+  log files, .env files, or a second copy of the application. The rules refuse
+  the file types listed in section 2, but a folder that never receives them
+  cannot leak them.
+
+9.3 Subfolder installs
+
+  https://yourdomain.com/donate and https://yourdomain.com/donate/ both work;
+  Apache answers the first with a small 301 redirect to the second. That is
+  normal. It is why published links should use the trailing-slash form.
+
+  The folder in 'site_url' must match the folder you installed into, spelled the
+  same way: a site at /Donate is not /donate. If site_url is empty the site
+  still works out the folder from each request, so links keep functioning — but
+  emails and the payment return URLs sent to the bank need it, so set it before
+  you enable a gateway (section 11.4).
+
+
+================================================================================
+10. STEP 8 — STATIC ASSETS AND UPLOADS (ALREADY IN PLACE)
+================================================================================
+There is nothing to do here, and that is deliberate. In this layout:
+
+  assets/    ships inside the folder, next to index.php. The pages ask for
+             /assets/css/style.css, the web server serves that file directly,
+             and uploads are written to the same folder the browser reads
+             (uploads/fundraisers/...).
+  uploads/   ships empty, with its own .htaccess that refuses to execute
+             anything and turns the PHP engine off for the directory.
+
+Because the application folder IS the folder being served, no symlink, no copy
+and no 'public_path' setting is needed: 'public_path' stays empty in config.php.
+
+10.1 After an update
+
+  A new release replaces assets/ (and index.php and the code) in the same
+  folder. Upload the new archive, extract it in your home directory, and move
+  its almarah-platform folder over the installed one (section 14). Nothing else
+  has to be refreshed: there is no second copy of the styling to keep in step.
+
+10.2 If assets answer 403 or 404
+
+  Section 9's two public checks (/assets/css/style.css and /assets/img/hero.jpg)
+  tell you which it is:
+
+    * 404 — the assets folder is missing from the served folder. Re-extract the
+      archive and move the folder in again, choosing "Overwrite".
+    * 403 — a .htaccess rule is refusing it. If you edited the main .htaccess,
+      restore it from a fresh copy: the shipped rules do not touch images, CSS
+      or JS.
+
+10.3 If uploaded images do not appear
+
+  The images live in <site folder>/uploads/. Check:
+
+    ls -l ~/public_html/donate/uploads/fundraisers
+
+  and then open one of the files in the browser (the path is stored in Admin >
+  Fundraisers, or shown in the fundraiser's own page source). If the file is
+  there and the URL 403s, the uploads/.htaccess is refusing it: restore that
+  file from the package (it should refuse only scriptable extensions).
+
+
+================================================================================
+11. STEP 9 — HTTPS, CRON JOBS AND EMAIL
+================================================================================
+11.1 HTTPS (do this before anything else goes live)
+
+  cPanel > Security > SSL/TLS Status (or "Let's Encrypt SSL")
+
+    - Select your domain -> Run AutoSSL / Issue
+    - Wait for the certificate to be installed (usually under 5 minutes)
+
+  Then in config.php:
+
+    'site_url' => 'https://yourdomain.com',
+
+  Setting site_url to https also marks the session cookie secure automatically.
+  (The .env equivalents, for an advanced setup, are APP_URL and
+  SESSION_SECURE_COOKIE=true.)
+
+  Optional but recommended: cPanel > Domains > Force HTTPS Redirect (or add
+  these lines at the top of the site's .htaccess):
+
+    RewriteEngine On
+    RewriteCond %{HTTPS} off
+    RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]
+
+  Put them ABOVE the existing rules, not below: the first matching rule wins,
+  and the rule that sends pages to index.php must come last.
+
+  HTTPS is not optional here: payment gateways reject non-HTTPS return URLs and
+  the session cookie is marked secure.
+
+11.2 Cron jobs
+
+  cPanel > Advanced > Cron Jobs > Add New Cron Job
+
+  Add these four. Replace USERNAME (and the folder, if you installed into a
+  subfolder) and use the PHP path you found in section 8.6.
+
+  (1) Queued email — every minute, or every five if your host limits frequency:
+
+      cd /home/USERNAME/public_html/donate && /usr/local/bin/php bin/console mail:work --once >> storage/logs/mail.log 2>&1
+
+  (2) Payment reconciliation — every five minutes:
+
+      cd /home/USERNAME/public_html/donate && /usr/local/bin/php bin/console payments:reconcile >> storage/logs/payments.log 2>&1
+
+  (3) Housekeeping — once an hour:
+
+      cd /home/USERNAME/public_html/donate && /usr/local/bin/php bin/console maintenance:prune >> storage/logs/maintenance.log 2>&1
+
+  (4) Fundraiser "ending soon" reminders — daily, 09:00:
+
+      cd /home/USERNAME/public_html/donate && /usr/local/bin/php bin/console reminders:fundraisers >> storage/logs/reminders.log 2>&1
+
+  In the cPanel UI, use the "Common Settings" dropdown ("Once Per Minute",
+  "Once Per 5 Minutes", "Once Per Hour", "Once Per Day") — but always paste the
+  full command into the Command field; the dropdown alone just sets the timing.
+
+  Notes:
+    * Shared hosting does not allow long-running processes, so always use
+      `mail:work --once`. Without --once it loops forever and your account gets
+      suspended for exceeding the entry-process limit.
+    * If your host only allows 5-minute cron, combine (1) and (2) into one job:
+        cd /home/USERNAME/public_html/donate && /usr/local/bin/php bin/console mail:work --once && /usr/local/bin/php bin/console payments:reconcile
+      Receipts then go out up to five minutes later, which is acceptable.
+    * Check the logs after the first run:
+        cPanel > File Manager > <site folder>/storage/logs/mail.log
+
+11.3 Email: sending from shared hosting
+
+  The platform sends everything over authenticated SMTP (it never uses PHP's
+  mail() function), so you have two options:
+
+  OPTION 1 — a mailbox on your own cPanel account (simplest)
+    cPanel > Email > Email Accounts -> Create
+      Address: fundraise@yourdomain.com
+      Password: generate a strong one
+    Then fill these in at Admin > Settings > Email / SMTP - recommended, because
+    the password is then stored encrypted in the database. The names below are
+    the .env equivalents, for an advanced setup:
+      MAIL_MAILER=smtp
+      SMTP_HOST=mail.yourdomain.com
+      SMTP_PORT=587
+      SMTP_ENCRYPTION=tls
+      SMTP_USERNAME=fundraise@yourdomain.com
+      SMTP_PASSWORD=<that mailbox password>
+      MAIL_FROM_ADDRESS=fundraise@yourdomain.com
+      MAIL_FROM_NAME="Almarah Foundation"
+      MAIL_REPLY_TO=info@yourdomain.com
+      MAIL_QUEUE_ENABLED=true
+      MAIL_VERIFY_PEER=true
+
+  OPTION 2 — a transactional provider (better deliverability for receipts)
+    Use your provider's SMTP host and credentials instead, e.g. Amazon SES,
+    Mailgun, Postmark, Brevo or Google Workspace. Put THEIR host in SMTP_HOST
+    and THEIR credentials in SMTP_USERNAME / SMTP_PASSWORD.
+
+  Two shared-hosting gotchas:
+    * Outbound port 25 is blocked on most hosts. Always use 587 (STARTTLS).
+      If 587 is also blocked, use 2525 or 465 (SSL) — check with support.
+    * The sending domain must have SPF and DKIM records, or receipts land in
+      spam. cPanel > Email Deliverability will show you the exact DNS records
+      to add, and offers an "Install the recommended records" button when the
+      domain's DNS is managed in the same cPanel account.
+
+  After saving, test it from the admin UI:
+    Admin > Settings > Email / SMTP > "Test connection"   (no email is sent)
+    Admin > Settings > Email / SMTP > "Send test email"   (sends a real one)
+  Or from Terminal:
+    php bin/console mail:stats
+
+11.4 Payment gateways
+
+  First set the site address (section 7.3) - the gateways are given it as the
+  return URL, so 'site_url' in config.php (or APP_URL in .env) must be the real
+  https address, including the folder in a subfolder install. The platform
+  refuses to start a payment while it is missing, rather than guessing from the
+  request, because a spoofed Host header could otherwise redirect donors to
+  somebody else's domain. Check it with:
+    php bin/console payments:health        # reports the site address too
+
+  Same as the main guide (INSTALL.txt section 5), with these cPanel notes:
+    * Set MEEZAN_ENABLED=true / ETISALAT_ENABLED=true (or enable them in
+      Admin > Settings) only once you have credentials.
+    * Give the bank these return URLs, with YOUR domain and folder:
+        https://yourdomain.com/donate/payments/meezan/return
+        https://yourdomain.com/donate/payments/etisalat/return
+    * Add the credentials in Admin > Settings (recommended), or in .env if you
+      prefer to keep secrets out of the file you upload — they are encrypted
+      with APP_KEY and never shown again.
+    * Check readiness any time with:
+        php bin/console payments:health
+
+
+================================================================================
+12. STEP 10 — SET PERMISSIONS
+================================================================================
+Shared hosting runs PHP as your own account user, so permissions are simpler
+than on a VPS. In cPanel Terminal:
+
+  cd ~/public_html/donate            # the folder you installed into
+  find . -type d -exec chmod 755 {} \;
+  find . -type f -exec chmod 644 {} \;
+  chmod 600 config.php
+  chmod -R 755 storage uploads
+
+config.php holds the database password, so it is the one file worth locking
+down. storage/app/app-key.txt sets its own permissions (0600) the first time
+the application writes it.
+
+If the host uses a different user for PHP than for FTP/File Manager (some do),
+you may need 775 on storage/ and uploads/ so PHP can write:
+
+  chmod -R 775 ~/public_html/donate/storage ~/public_html/donate/uploads
+
+Never use 777. If the application still cannot write, ask support which user
+PHP runs as and set ownership accordingly.
+
+
+================================================================================
+13. VERIFICATION CHECKLIST
+================================================================================
+Work through this in order. Each line is pass/fail.
+
+  [ ] The site folder is in the right place, with the private half of it in the
+      same folder
+        ls -ld ~/public_html/donate
+        ls -a ~/public_html/donate      -> index.php .htaccess config.php
+                                           assets uploads app bin bootstrap
+                                           config database resources routes
+                                           storage vendor composer.json ...
+
+  [ ] Every private folder carries its own refusal
+        ls ~/public_html/donate/app/.htaccess
+        ls ~/public_html/donate/config/.htaccess
+        ls ~/public_html/donate/database/.htaccess
+        ls ~/public_html/donate/storage/.htaccess
+        ls ~/public_html/donate/vendor/.htaccess
+
+  [ ] The private half is refused by URL  (the check that matters most)
+        curl -s -o /dev/null -w '%{http_code}\n' \
+          https://yourdomain.com/donate/config.php
+        -> 403 (or 404). If this returns the file, STOP: section 9 and 17.2.
+        Same for /storage/app/app-key.txt, /app/Core/Database.php,
+        /database/migrations/0001_core_auth.sql, /vendor/autoload.php
+
+  [ ] The public half loads
+        curl -s -o /dev/null -w '%{http_code}\n' \
+          https://yourdomain.com/donate/assets/css/style.css     -> 200
+        https://yourdomain.com/donate/assets/img/hero.jpg        -> 200
+
+  [ ] config.php holds the three database values and is not world-readable
+        ls -l ~/public_html/donate/config.php     -> -rw------- (600)
+        grep db_name ~/public_html/donate/config.php
+
+  [ ] The encryption key was generated automatically
+        ls -l ~/public_html/donate/storage/app/app-key.txt    -> mode 0600
+        (created on the first page load; never copy it between sites)
+
+  [ ] The installer has finished and locked itself
+        ls ~/public_html/donate/storage/app/installed.lock    -> exists
+        ls ~/public_html/donate/storage/app/setup-key.txt     -> must NOT exist
+        (there is no installer key file in this version at all)
+        https://yourdomain.com/donate/setup -> says "Already installed"
+
+  [ ] PHP version is 8.2+ — for the WEBSITE and for the COMMAND LINE
+        cPanel > MultiPHP Manager (website)
+        Terminal: php -v              (command line; they can differ)
+
+  [ ] vendor/ is present
+        ls ~/public_html/donate/vendor/autoload.php
+
+  [ ] The schema is complete
+        cd ~/public_html/donate && php bin/console migrate:status
+        -> every migration shows [x], none [ ]
+
+  [ ] The code has no syntax errors
+        cd ~/public_html/donate && php bin/console lint
+        -> "Checked N PHP file(s); 0 failure(s)."
+
+  [ ] HTTPS works and redirects
+        https://yourdomain.com/donate  -> padlock, no mixed-content warning
+        http://  -> redirects to https://
+
+  [ ] Sign-in works
+        https://yourdomain.com/donate/login  -> your administrator email and the
+        password you chose at setup. The admin area is at /admin; a fundraiser
+        account sees /dashboard.
+
+  [ ] The home page, fundraisers page, one fundraiser page, FAQ, privacy policy
+      and support page all load in a private browser window (no cache).
+
+  [ ] Uploads work end to end
+        Sign in as a fundraiser, create a fundraiser with a cover image, then
+        open the image URL: it must load from /donate/uploads/fundraisers/...
+        (A .php file placed in uploads/ must answer 403 — that is the hardening
+        working.)
+
+  [ ] Cron jobs are installed and running (section 11.2)
+        After five minutes, storage/logs/mail.log shows a completed run.
+
+  [ ] A receipt email arrives
+        The donor address should receive the receipt, with a plain-text
+        alternative. Check Admin > Email queue for the delivery record.
+
+
+================================================================================
+14. UPDATING THE APPLICATION ON cPANEL
+================================================================================
+  1. Back up first (section 16). Then:
+
+  2. Get the new release as one folder (section 5.1) and upload the zip to your
+     account home, then extract it there. You now have a fresh
+     ~/almarah-platform folder next to the installed one.
+
+  3. Put the new files in place of the installed ones, keeping THREE things:
+       config.php           your database name, user and password
+       storage/app/         app-key.txt (decrypts stored passwords) and
+                            installed.lock
+       uploads/             images your fundraisers have uploaded
+
+     In File Manager: open the new ~/almarah-platform folder, select everything
+     (Ctrl+A), Move it into the served folder (~/public_html/donate) and choose
+     "Overwrite" when cPanel asks — but move the three items above out of the
+     way first and put them back afterwards. In cPanel Terminal, one sequence
+     does all of it:
+
+       cd ~/public_html
+       mv donate donate.old
+       cp -R ~/almarah-platform donate
+       cp donate.old/config.php donate/config.php
+       cp -R donate.old/storage/app donate/storage/app
+       cp -R donate.old/uploads/* donate/uploads/      # if not empty
+       rm -rf donate.old
+
+     (Keep donate.old until the new release has been checked, if you prefer:
+     that is the rollback.)
+
+     The release archive deliberately excludes storage/app/*, so an
+     installed.lock or app-key.txt from the build machine can never land on a
+     live site.
+
+  4. Apply any new migrations:
+       cd ~/public_html/donate && php bin/console migrate
+       (via Terminal, or a temporary cron job with "Run Now")
+
+  5. Clear the cache:
+
+       rm -rf ~/public_html/donate/storage/cache/*
+
+  6. Confirm the folder is still closed (section 9): /donate/config.php must
+     still answer 403. A new release always ships the .htaccess files; if a
+     copy step dropped them, this catches it.
+
+  7. Verify with the checklist in section 13.
+
+  Rollback: restore the previous folder (donate.old) and, if the update included
+  a migration, restore the matching database dump. Migrations are
+  forward-only; the code and the schema must match, so never restore the
+  database without restoring the matching code, or vice versa.
+
+
+================================================================================
+15. TROUBLESHOOTING
+================================================================================
+Every page except the home page shows 404
+  Apache is not reading .htaccess, so the site's addresses (/fundraisers,
+  /login, /setup) are not being routed to index.php. Only the home page can
+  work in that state - and CONFIG.PHP IS DOWNLOADABLE, so treat it as a
+  security incident until it is fixed: see section 9 and 17.2, and ask your
+  host to enable AllowOverride for the folder. If your host cannot, use the
+  alternative layout in section 17.4.
+
+403 Forbidden on every page
+  The .htaccess is being read, but something in it is refused by your host.
+  cPanel > Metrics > Errors names the line. The two usual ones:
+    "Options not allowed here"      remove the "Options -Indexes" line
+    "Invalid command 'php_flag'"    remove the php_flag/php_value lines you
+                                    added (the package ships without them)
+  Restore the file from a fresh copy of the package if you are unsure: the
+  shipped rules are legal in .htaccess context on cPanel.
+
+500 Internal Server Error on every page, immediately after installing
+  Almost always one of:
+    a) php_flag / php_value lines added to the site's .htaccess on a host
+       running PHP as CGI/suPHP. Remove those lines; set values in MultiPHP
+       INI Editor.
+    b) A PHP version below 8.2 still selected for the domain.
+    c) A <Directory> block was added to an .htaccess - that is only legal in
+       server or virtual-host configuration, so Apache refuses every request.
+  Check cPanel > Metrics > Errors first; it names the file and line.
+
+"The application files are missing from this folder."
+  index.php is there without the rest of the site beside it — usually because
+  only part of the folder was copied into the served folder. Move the whole
+  almarah-platform folder into it (section 5.3) rather than copying files out
+  of it.
+
+The site has no colours or images (assets 403 or 404)
+  404: the assets folder is not in the served folder — move the whole folder in
+  again, choosing "Overwrite". 403: something is refusing it; section 10.2.
+
+Uploaded images appear broken even though the upload "succeeded"
+  The uploads folder inside the served folder must be writable by the web user
+  (section 12) and must still contain its own .htaccess. Check:
+      ls -l ~/public_html/donate/uploads/fundraisers
+      curl -s -o /dev/null -w '%{http_code}\n' https://yourdomain.com/donate/uploads/fundraisers/<file>
+  Leave 'public_path' EMPTY in config.php: it is not needed in this layout, and
+  a value there (especially a web address) sends uploads somewhere the browser
+  cannot read.
+
+404 on every page of a subfolder install
+  config.php's site_url does not match where the files are. The folder in that
+  address must be the folder you installed into, spelled the same way: a site at
+  /Donate is not /donate. Open https://yourdomain.com/donate/setup and read the
+  line that starts "Serving this site from the ... folder" — if it is missing the
+  folder, add it to site_url.
+
+"Already installed" on a site you have not installed
+  A previous install left storage/app/installed.lock, or the database already
+  contains an administrator. Both are visible in section 13's checklist. To
+  start over: drop the database's tables and views in phpMyAdmin, delete
+  installed.lock, and open /setup again.
+
+"You do not have permission to access that area" or a white page after login
+  Session directory not writable, or SESSION_SECURE_COOKIE=true while you are
+  testing over plain HTTP. Set it to false temporarily, or test over https://.
+
+SQLSTATE[HY000] [1045] Access denied for user 'almarf1_almarah'@'localhost'
+  Wrong password, or you omitted the cPanel prefix on the database user. In
+  config.php the values must be the FULL names cPanel created, e.g.
+  almarf1_almarah_platform and almarf1_almarah. The /setup page reports this
+  in plain English instead of SQL, so open /setup and read the red line.
+
+SQLSTATE[1044] Access denied ... to database
+  The database user was created but not added to that specific database.
+  cPanel > MySQL Databases > Add User To Database, ALL PRIVILEGES.
+
+SQLSTATE[HY000] [2002] Connection refused
+  db_host is wrong. Try 'localhost' instead of '127.0.0.1' (or vice versa).
+  On some hosts the database service listens on a socket only.
+
+"Could not connect to the database. MySQL said: ..."
+  The /setup page reports the MySQL error beneath this line (for example 1045,
+  1044, 1049, 2002 or 1130) and translates each one into the setting to change.
+  Use that line: it names the user or the database MySQL actually rejected.
+  The four usual causes, in order of likelihood:
+    1. the database user was never added to the database (1044) - in cPanel >
+       MySQL Databases, "Add User To Database", ALL PRIVILEGES;
+    2. the password or username has a typo (1045);
+    3. the name is missing its cPanel prefix (1049/1045);
+    4. the host: try localhost, then 127.0.0.1 (2002).
+
+  If you keep a .env file, a password containing # can confuse its parser (a #
+  starts a comment) - wrap it in double quotes there. In config.php that cannot
+  happen: it is ordinary PHP, and any character is safe inside single quotes
+  (escape a literal backslash or quote if you use one).
+
+Migrations fail with "Table already exists"
+  You ran migrate against a database that already has the schema but no
+  migrations table (for example you imported a dump). Either drop the database
+  and start clean, or accept the state: run
+      php bin/console migrate:status
+  and if all migrations are listed as applied, continue.
+
+Migration stops with a memory or timeout error
+  Raise memory_limit to 512M in MultiPHP INI Editor temporarily, or run the
+  migrations one file at a time with a temporary cron job. Shared hosts cap
+  max_execution_time for web requests, but cron jobs are usually exempt.
+
+Emails are queued but never sent
+  In order: (1) is the cron job in section 11.2 installed and running with the
+  correct PHP path? (2) are the SMTP settings right — test with "Send test
+  email"? (3) is MAIL_QUEUE_ENABLED=true while the worker never runs? Set it to
+  false to send inline while you diagnose. (4) check storage/logs/mail.log.
+
+"Could not authenticate" / SMTP timeout on port 587
+  Many shared hosts block outbound SMTP ports. Ask support which ports are
+  open (587 and 465 usually are; 25 usually is not), or use the mailbox on your
+  own domain (Option 1 in section 11.3), which needs no outbound connection at
+  all on most hosts.
+
+Cron "Run Now" does nothing
+  The command field usually needs the full path to PHP and a cd into the site
+  folder. Test the exact line in cPanel Terminal first; whatever works there
+  works in cron.
+
+Donations stay "processing" forever
+  The reconciliation cron is not running, or the provider has not allowlisted
+  your return URL. Check cPanel > Cron Jobs, then run
+      php bin/console payments:reconcile
+  by hand and read the output; also open the donation in Admin > Donations and
+  read the callback log.
+
+The admin area is slow or times out
+  Shared CPU/memory limits (LVE). Reduce the admin page size if you have large
+  datasets, or ask support to raise your account's limits temporarily while
+  running reports.
+
+Account suspended for resource usage
+  You are almost certainly running `mail:work` without `--once`, which loops
+  forever. Stop the cron job immediately, then use `mail:work --once` only.
+
+
+================================================================================
+16. BACKUPS ON cPANEL
+================================================================================
+Back up four things:
+
+  1. The database                (cPanel > Files > Backup, or mysqldump)
+  2. config.php and storage/app/ (config.php holds the database password;
+                                  storage/app/app-key.txt decrypts the stored
+                                  gateway and SMTP passwords - without it they
+                                  are unrecoverable)
+  3. uploads/                    (fundraiser images, inside the site folder)
+  4. The application code        (or keep it in version control)
+
+  Note that 2, 3 and 4 now live in the same folder, so "back up the site folder
+  plus the database" covers everything — but exclude uploads/ from any copy you
+  leave on the server if it grows large.
+
+Manual backup:
+  cPanel > Files > Backup > Download a Full Account Backup, or
+  cPanel > Files > Backup Wizard > Backup > MySQL Databases
+
+Automated nightly dump via cron (add a cron job, not a Terminal one-off):
+
+  mkdir -p ~/backups && mysqldump --single-transaction --routines --triggers \
+    --default-character-set=utf8mb4 -u almarf1_almarah -p'YOUR_DB_PASSWORD' \
+    almarf1_almarah_platform | gzip > ~/backups/db-$(date +\%F).sql.gz
+
+  Notes:
+    * The % must be escaped as \% inside a crontab.
+    * Escape the password carefully, or better: create ~/.my.cnf with the
+      credentials and mode 600 so the password never appears in the cron line
+      or in server logs.
+    * Keep backups OUTSIDE the site folder, and download them periodically —
+      backups sitting on the same account are not backups. A .sql file inside
+      the site folder is refused by the .htaccess, but it has no business being
+      there.
+
+Restore the code, config.php, storage/app/app-key.txt and uploads/ alongside
+the database dump. A database restored without the matching app-key.txt comes
+back with unreadable gateway and SMTP credentials.
+
+Restore:
+  cPanel > Files > Backup > Restore, or
+  gunzip -c ~/backups/db-2026-10-06.sql.gz | mysql -u almarf1_almarah -p'...' almarf1_almarah_platform
+
+Then run `php bin/console migrate:status` to confirm the schema matches the
+deployed code, and work through section 13 again.
+
+
+================================================================================
+17. SECURITY NOTES FOR SHARED HOSTING
+================================================================================
+17.1 What protects what
+
+  In this layout the web server serves the same folder that holds your database
+  password, so the .htaccess rules are load-bearing. Three of them exist for
+  that reason, and they are independent:
+
+    * the main .htaccess refuses the private folders by name and the private
+      file types everywhere;
+    * every private folder refuses everything by itself;
+    * uploads/ refuses to execute anything, whatever lands in it.
+
+  Verify them once per deployment (section 9). It is one click, and it is the
+  difference between believing and knowing.
+
+17.2 If the check fails: what to send your host
+
+  "The site at /home/USER/domains/example.com/public_html/donate relies on
+   .htaccess for URL routing and for refusing access to config.php. At the
+   moment /donate/config.php is downloadable and inner pages 404, which means
+   AllowOverride is off for this document root. Please enable AllowOverride All
+   for the document root (or the equivalent in the panel's Apache configuration
+   for this domain), or tell us the setting we should use instead."
+
+  Ask them to confirm afterwards; then re-run section 9's checks.
+
+17.3 Staying safe in the meantime
+
+  Until the check passes, do not put real donor data in the site and do not
+  enable a payment gateway.
+
+17.4 The alternative layout for a host that will not enable .htaccess
+
+  Keep the application OUTSIDE the served folder, where no URL can reach it,
+  and serve only the four public things:
+
+    /home/USERNAME/almarah-platform/     the whole folder, as shipped, but
+                                        moved one level up (out of public_html)
+    /home/USERNAME/public_html/donate/   index.php, .htaccess, assets/,
+                                        uploads/
+
+  Then tell the site where the served folder is, in config.php:
+
+    'public_path' => '/home/USERNAME/public_html/donate',
+
+  (a FOLDER on the server, never a web address) and delete the private folders
+  from the served folder — they now live in the application folder above it.
+  The session cookie, uploads and links all keep working; the difference is
+  that the pages are in one folder and the code in another. This layout still
+  needs .htaccess for URL routing (the inner pages), so it is only an
+  improvement in the "config.php must not be downloadable" sense; if rewriting
+  is disabled entirely, the site cannot route at all on Apache and the host must
+  enable it or move you to a server that does.
+
+17.5 Habits
+
+  * config.php (database password) and any .env you keep must be 600, never
+    pasted into a support ticket and never committed to Git.
+  * storage/app/app-key.txt protects every stored gateway and SMTP password.
+    The application writes it with mode 0600. Do not copy it between
+    installations, do not delete it, and back it up (section 16).
+  * Rotate the database password immediately if it has ever been shared. If the
+    .htaccess check in section 9 ever failed on a live site, assume the password
+    was readable and rotate it.
+  * Rotate APP_KEY only deliberately: after changing it, re-enter all gateway
+    and SMTP credentials in Admin > Settings, because the stored values were
+    encrypted with the old key.
+  * Keep the host's PHP version updated in MultiPHP Manager as new 8.x releases
+    become available; security fixes ship there.
+  * Enable AutoSSL renewal and check it after cPanel updates; an expired
+    certificate breaks payment returns and secure-cookie sessions.
+  * Do not install WordPress, phpMyAdmin clones or other unused PHP apps in the
+    same account. Every extra app is extra attack surface on a shared server.
+  * Remove the temporary cron jobs you created for migrations once setup is
+    done, especially any make:admin job.
+  * Review Admin > Audit after go-live. It records who changed what, and payment
+    callbacks are stored with credential-bearing fields already stripped.
+  * If you suspect compromise: change the cPanel password, the database
+    password, the SMTP password and APP_KEY (in that order), then review
+    storage/logs and the audit log for the window in question.
+
+================================================================================
+End of cPanel installation guide. For server-level detail (Apache/Nginx config,
+systemd workers, tuning) see INSTALL.txt.
+================================================================================

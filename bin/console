@@ -1,0 +1,495 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Almarah Foundation fundraising platform — command line console.
+ *
+ * Usage: php bin/console <command> [options]
+ */
+
+use App\Core\Database;
+use App\Core\Logger;
+use App\Database\Migrator;
+use App\Mail\MailQueue;
+use App\Payments\PaymentGatewayManager;
+use App\Payments\PaymentLock;
+use App\Repositories\UserRepository;
+
+if (PHP_SAPI !== 'cli') {
+    fwrite(STDERR, "This script must be run from the command line.\n");
+    exit(1);
+}
+
+$app = require dirname(__DIR__) . '/bootstrap/app.php';
+
+/** @var Database $db */
+$db = $app->make(Database::class);
+/** @var Logger $logger */
+$logger = $app->make(Logger::class);
+
+$argv = $_SERVER['argv'] ?? [];
+$command = $argv[1] ?? 'help';
+$args = array_slice($argv, 2);
+
+/** @var array<string,callable> $commands */
+$commands = [];
+
+// ---------------------------------------------------------------- migrations
+
+$commands['migrate'] = static function () use ($app, $db, $logger): int {
+    $migrator = new Migrator($db, $app->basePath('database/migrations'), $logger);
+    $executed = $migrator->run();
+
+    if ($executed === []) {
+        echo "Nothing to migrate — database is up to date.\n";
+        return 0;
+    }
+
+    foreach ($executed as $migration) {
+        echo "  migrated: {$migration}\n";
+    }
+    echo count($executed) . " migration(s) applied.\n";
+    return 0;
+};
+
+$commands['migrate:status'] = static function () use ($app, $db, $logger): int {
+    $migrator = new Migrator($db, $app->basePath('database/migrations'), $logger);
+    $applied = $migrator->applied();
+    $pending = $migrator->pending();
+
+    echo "Applied:\n";
+    foreach ($applied as $m) {
+        echo "  [x] {$m}\n";
+    }
+    echo "Pending:\n";
+    foreach ($pending as $m) {
+        echo "  [ ] {$m}\n";
+    }
+    return 0;
+};
+
+// ------------------------------------------------------------------- seeding
+
+$commands['db:seed'] = static function (array $args) use ($app, $db, $logger): int {
+    $only = $args[0] ?? null;
+
+    $seeders = [
+        'RoleSeeder',
+        'CategorySeeder',
+        'CampaignSeeder',
+        'GatewaySeeder',
+        'EmailTemplateSeeder',
+        'ContentSeeder',
+        'FaqSeeder',
+        'SettingSeeder',
+        'DemoSeeder',
+    ];
+
+    // Demo fundraisers, donations and donor accounts are examples, not
+    // content: they are only loaded on a development machine, or when an
+    // operator explicitly asks for them (`php bin/console db:seed Demo`).
+    $environment = (string) \App\Core\Config::get('app.env', 'production');
+    $skipDemo = !in_array($environment, ['local', 'testing'], true) && $only === null;
+
+    $run = 0;
+    foreach ($seeders as $seeder) {
+        if ($skipDemo && $seeder === 'DemoSeeder') {
+            echo "  skipped (demo data disabled outside local/testing): {$seeder}\n";
+            continue;
+        }
+
+        if ($only !== null && stripos($seeder, $only) === false) {
+            continue;
+        }
+
+        $class = 'Database\\Seeders\\' . $seeder;
+        $file = $app->basePath('database/seeders/' . $seeder . '.php');
+
+        if (!is_file($file)) {
+            echo "  skipped (missing): {$seeder}\n";
+            continue;
+        }
+
+        require_once $file;
+
+        if (!class_exists($class)) {
+            echo "  skipped (no class): {$seeder}\n";
+            continue;
+        }
+
+        /** @var object $instance */
+        $instance = new $class($db, $logger);
+        if (method_exists($instance, 'run')) {
+            $count = $instance->run();
+            echo "  seeded: {$seeder}" . (is_int($count) ? " ({$count})" : '') . "\n";
+            $run++;
+        }
+    }
+
+    echo "{$run} seeder(s) executed.\n";
+    return 0;
+};
+
+// --------------------------------------------------------------- first admin
+
+$commands['make:admin'] = static function () use ($app, $db, $logger): int {
+    /** @var UserRepository $users */
+    $users = $app->make(UserRepository::class);
+
+    $email = (string) Env_or_ask('ADMIN_EMAIL', 'Email address for the super administrator: ');
+    $password = (string) Env_or_ask('ADMIN_PASSWORD', 'Password (min 10 characters, hidden): ', true);
+    $firstName = (string) Env_or_ask('ADMIN_FIRST_NAME', 'First name [Almarah]: ', false, 'Almarah');
+    $lastName = (string) Env_or_ask('ADMIN_LAST_NAME', 'Last name [Admin]: ', false, 'Admin');
+
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        fwrite(STDERR, "A valid email address is required.\n");
+        return 1;
+    }
+
+    if (mb_strlen($password) < 10) {
+        fwrite(STDERR, "The password must be at least 10 characters.\n");
+        return 1;
+    }
+
+    if (!preg_match('/[A-Za-z]/', $password) || !preg_match('/\d/', $password)) {
+        fwrite(STDERR, "The password must contain at least one letter and one number.\n");
+        return 1;
+    }
+
+    if ($users->findByEmail($email) !== null) {
+        fwrite(STDERR, "A user with that email address already exists.\n");
+        return 1;
+    }
+
+    $userId = $users->create([
+        'first_name'        => $firstName,
+        'last_name'         => $lastName,
+        'email'             => $email,
+        'password_hash'     => password_hash($password, PASSWORD_DEFAULT),
+        'status'            => 'active',
+        'email_verified_at' => gmdate('Y-m-d H:i:s'),
+    ]);
+
+    $users->assignRole($userId, 'admin');
+    $users->assignRole($userId, 'super_admin');
+
+    $logger->security('Super administrator created via console', ['user_id' => $userId]);
+
+    echo "Super administrator created (user #{$userId}).\n";
+    echo "IMPORTANT: this command is for first-time setup only. Do not expose it to the web.\n";
+    return 0;
+};
+
+$commands['admin:promote'] = static function (array $args) use ($app, $logger): int {
+    $email = $args[0] ?? '';
+    $role = $args[1] ?? 'admin';
+
+    if ($email === '' || !in_array($role, ['admin', 'super_admin'], true)) {
+        fwrite(STDERR, "Usage: php bin/console admin:promote <email> [admin|super_admin]\n");
+        return 1;
+    }
+
+    /** @var UserRepository $users */
+    $users = $app->make(UserRepository::class);
+    $user = $users->findByEmail($email);
+
+    if ($user === null) {
+        fwrite(STDERR, "No user found with that email address.\n");
+        return 1;
+    }
+
+    $users->assignRole((int) $user['id'], $role);
+    $logger->security('Role assigned via console', ['user_id' => (int) $user['id'], 'role' => $role]);
+
+    echo "Granted '{$role}' to {$email}.\n";
+    return 0;
+};
+
+// ---------------------------------------------------------------- mail queue
+
+$commands['mail:work'] = static function (array $args) use ($app): int {
+    /** @var MailQueue $queue */
+    $queue = $app->make(MailQueue::class);
+
+    $recovered = $queue->recoverStuck(15);
+    if ($recovered > 0) {
+        echo "Recovered {$recovered} stalled job(s).\n";
+    }
+
+    $once = in_array('--once', $args, true);
+    $limit = (int) (\App\Core\Config::get('mail.queue.batch', 25));
+
+    do {
+        $stats = $queue->work($limit);
+        echo sprintf("sent=%d failed=%d skipped=%d\n", $stats['sent'], $stats['failed'], $stats['skipped']);
+
+        if ($once) {
+            break;
+        }
+
+        // Keep draining while there is work; sleep briefly between batches.
+        if (($stats['sent'] + $stats['failed'] + $stats['skipped']) > 0) {
+            continue;
+        }
+
+        sleep(5);
+    } while (true);
+
+    return 0;
+};
+
+$commands['mail:stats'] = static function () use ($app): int {
+    /** @var MailQueue $queue */
+    $queue = $app->make(MailQueue::class);
+
+    foreach ($queue->stats() as $status => $count) {
+        printf("%-12s %d\n", $status, $count);
+    }
+    return 0;
+};
+
+// ------------------------------------------------------------------ payments
+
+$commands['payments:reconcile'] = static function (array $args) use ($app): int {
+    /** @var \App\Services\DonationService $donations */
+    $donations = $app->make(\App\Services\DonationService::class);
+    /** @var \App\Repositories\PaymentRepository $payments */
+    $payments = $app->make(\App\Repositories\PaymentRepository::class);
+
+    $limit = (int) ($args[0] ?? 50);
+    $olderThan = (int) ($args[1] ?? 15);
+
+    $pending = $payments->pendingForReconciliation($limit, $olderThan);
+
+    if ($pending === []) {
+        echo "No pending transactions require reconciliation.\n";
+        return 0;
+    }
+
+    foreach ($pending as $transaction) {
+        $result = $donations->reconcile((int) $transaction['id']);
+        printf(
+            "  #%d %s (%s) -> %s : %s\n",
+            (int) $transaction['id'],
+            (string) $transaction['merchant_order_id'],
+            (string) $transaction['gateway_code'],
+            $result['status'],
+            $result['message']
+        );
+    }
+
+    return 0;
+};
+
+$commands['payments:health'] = static function () use ($app): int {
+    /** @var PaymentGatewayManager $manager */
+    $manager = $app->make(PaymentGatewayManager::class);
+
+    foreach ($manager->health() as $code => $health) {
+        printf(
+            "%-10s enabled=%s configured=%s env=%s currency=%s host=%s\n",
+            $code,
+            $health['enabled'] ? 'yes' : 'no',
+            $health['configured'] ? 'yes' : 'no',
+            (string) $health['environment'],
+            (string) $health['currency'],
+            (string) ($health['host'] ?? 'unset')
+        );
+    }
+
+    /** @var \App\Services\SettingsService $settings */
+    $settings = $app->make(\App\Services\SettingsService::class);
+    echo 'SMTP configured: ' . ($settings->mailConfigured() ? 'yes' : 'no') . "\n";
+
+    // Gateways are handed an absolute return URL, so the site address has to be
+    // known before a single donation can be taken online.
+    $siteUrl = rtrim((string) \App\Core\Config::get('app.url', ''), '/');
+    $absolute = preg_match('#^https?://[^\s/]+#i', $siteUrl) === 1;
+    echo 'Site address: ' . ($siteUrl === '' ? 'NOT SET' : $siteUrl)
+        . ($absolute ? '' : '  <-- set site_url in config.php (or APP_URL) before enabling a gateway') . "\n";
+    if ($absolute && stripos($siteUrl, 'https://') !== 0) {
+        echo "Site address is not HTTPS: most providers reject plain-http return URLs.\n";
+    }
+
+    return $absolute ? 0 : 1;
+};
+
+// --------------------------------------------------------------- maintenance
+
+$commands['maintenance:prune'] = static function () use ($app): int {
+    $rateLimiter = $app->make(\App\Core\RateLimiter::class);
+    $lock = $app->make(PaymentLock::class);
+
+    $limits = $rateLimiter->purgeExpired();
+    $locks = $lock->purgeExpired();
+
+    echo "Pruned {$limits} rate-limit row(s) and {$locks} payment lock(s).\n";
+    return 0;
+};
+
+$commands['reminders:fundraisers'] = static function () use ($app): int {
+    /** @var \App\Services\FundraiserService $service */
+    $service = $app->make(\App\Services\FundraiserService::class);
+    /** @var \App\Mail\Mailer $mailer */
+    $mailer = $app->make(\App\Mail\Mailer::class);
+
+    $count = 0;
+    foreach ($service->endingSoon(7) as $fundraiser) {
+        $days = (int) ceil((strtotime((string) $fundraiser['end_at'] . ' UTC') - time()) / 86400);
+
+        $mailer->fundraiserEndingSoon(
+            (string) $fundraiser['owner_email'],
+            (string) $fundraiser['first_name'],
+            $fundraiser,
+            max(1, $days)
+        );
+        $count++;
+    }
+
+    echo "Queued {$count} ending-soon reminder(s).\n";
+    return 0;
+};
+
+// --------------------------------------------------------------------- lint
+
+$commands['lint'] = static function () use ($app): int {
+    // tests/ is deliberately absent from a production upload (see
+    // INSTALL-CPANEL.txt section 5.1), so a missing directory is normal here
+    // and must not make this check unusable on a real host.
+    $directories = ['app', 'config', 'routes', 'bin', 'database', 'tests'];
+    $failures = 0;
+    $checked = 0;
+    $skipped = [];
+
+    foreach ($directories as $directory) {
+        $path = $app->basePath($directory);
+
+        if (!is_dir($path)) {
+            $skipped[] = $directory;
+            continue;
+        }
+
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($path, FilesystemIterator::SKIP_DOTS)
+        );
+
+        foreach ($iterator as $file) {
+            if ($file->getExtension() !== 'php') {
+                continue;
+            }
+
+            $checked++;
+            $output = [];
+            $exit = 0;
+            exec('php -l ' . escapeshellarg($file->getPathname()) . ' 2>&1', $output, $exit);
+            if ($exit !== 0) {
+                $failures++;
+                echo implode("\n", $output) . "\n";
+            }
+        }
+    }
+
+    // The web entry points (index.php, router.php) and the owner's config.php
+    // live in the application folder itself in this layout, so they are checked
+    // too. vendor/ is not: composer maintains it, and walking it would turn a
+    // two-second check into a minute on shared hosting.
+    foreach (['index.php', 'router.php', 'config.php'] as $file) {
+        $path = $app->basePath($file);
+
+        if (!is_file($path)) {
+            continue;
+        }
+
+        $checked++;
+        $output = [];
+        $exit = 0;
+        exec('php -l ' . escapeshellarg($path) . ' 2>&1', $output, $exit);
+        if ($exit !== 0) {
+            $failures++;
+            echo implode("\n", $output) . "\n";
+        }
+    }
+
+    echo "Checked {$checked} PHP file(s); {$failures} failure(s).\n";
+    if ($skipped !== []) {
+        echo 'Skipped (not present): ' . implode(', ', $skipped) . "\n";
+    }
+
+    return $failures === 0 ? 0 : 1;
+};
+
+$commands['route:list'] = static function () use ($app): int {
+    /** @var \App\Core\Router $router */
+    $router = $app->make(\App\Core\Router::class);
+    foreach ($router->routeList() as $line) {
+        echo $line . "\n";
+    }
+    return 0;
+};
+
+$commands['help'] = static function () use ($commands): int {
+    echo "Almarah Foundation fundraising platform — console\n\n";
+    echo "Commands:\n";
+    foreach (array_keys($commands) as $name) {
+        echo "  php bin/console {$name}\n";
+    }
+    echo "\nOptions are documented per command; run with no arguments for defaults.\n";
+    return 0;
+};
+
+// ----------------------------------------------------------------- dispatch
+
+if (!isset($commands[$command])) {
+    fwrite(STDERR, "Unknown command: {$command}\n");
+    $commands['help']([]);
+    exit(1);
+}
+
+try {
+    $exit = $commands[$command]($args);
+    exit(is_int($exit) ? $exit : 0);
+} catch (Throwable $e) {
+    fwrite(STDERR, 'ERROR: ' . $e->getMessage() . "\n");
+    $logger->error('Console command failed', [
+        'command'   => $command,
+        'exception' => get_class($e),
+        'message'   => $e->getMessage(),
+        'file'      => $e->getFile() . ':' . $e->getLine(),
+    ]);
+    exit(1);
+}
+
+/**
+ * Reads a value from the environment first (so provisioning can be scripted
+ * without interactive prompts), falling back to a prompt.
+ */
+function Env_or_ask(string $key, string $prompt, bool $hidden = false, string $default = ''): string
+{
+    $env = getenv($key);
+    if ($env !== false && $env !== '') {
+        return (string) $env;
+    }
+
+    if (!defined('STDIN') || !is_resource(STDIN)) {
+        return $default;
+    }
+
+    echo $prompt;
+
+    if ($hidden && function_exists('shell_exec') && stripos(PHP_OS_FAMILY, 'win') === false) {
+        // Masked input where a terminal is available.
+        $value = @shell_exec('stty -echo; head -n 1; stty echo');
+        echo "\n";
+        $value = trim((string) $value);
+        if ($value !== '') {
+            return $value;
+        }
+    }
+
+    $line = fgets(STDIN);
+    $value = $line === false ? '' : trim($line);
+
+    return $value !== '' ? $value : $default;
+}

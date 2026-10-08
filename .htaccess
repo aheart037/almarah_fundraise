@@ -1,0 +1,83 @@
+# Almarah Foundation Fundraising Platform — Apache rules for the whole folder.
+#
+# This file sits at the top of the almarah-platform folder, which is the folder
+# your site is served from. It does two jobs:
+#
+#   1. sends every address (https://yourdomain.com/donate/fundraisers, …) to
+#      index.php, which is the only PHP file a visitor may run;
+#   2. refuses every private thing that shares this folder with it — the
+#      database password in config.php, the encryption key in storage/app/,
+#      the application code, the migrations and the logs.
+#
+# Each private folder ALSO carries its own .htaccess with a blanket refusal, so
+# job 2 does not depend on this file alone. If your host ignores .htaccess
+# entirely (rare; Apache and LiteSpeed honour it, and the site would not route
+# at all without it), please read section 17 of INSTALL-CPANEL.txt.
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # ---- 1. private folders ------------------------------------------------
+    # The application itself. None of these names is a page on the site, so
+    # nothing legitimate is caught here.
+    RewriteRule ^(app|bin|bootstrap|config|database|deploy|resources|routes|storage|tests|vendor)(/|$) - [F,L]
+
+    # ---- 2. private file types --------------------------------------------
+    # SQL dumps and migrations, logs, documentation, key files, composer
+    # metadata, editor and version-control leftovers. Images, CSS and JS are
+    # NOT affected: they are what the site needs to be visible.
+    RewriteRule \.(sql|log|md|txt|json|lock|ini|sh|phar|bak|old|orig|swp|example|dist|ne|yml|yaml)$ - [F,L,NC]
+
+    # /.well-known is deliberately left open: cPanel's AutoSSL (and any Let's
+    # Encrypt client) writes its validation file there. It holds no secret and
+    # no application code, and refusing it would break certificate renewal.
+
+    # ---- 3. what is left is the website -----------------------------------
+    # Real files (assets, uploaded images) are served as they are.
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # Everything else is a page of the application.
+    RewriteRule ^ index.php [L]
+</IfModule>
+
+# Belt and braces for when mod_rewrite is unavailable: the name-based rules
+# below still refuse the important files, and every private folder refuses
+# everything by itself.
+<FilesMatch "^\.env|^\.">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+<FilesMatch "^(config\.php|router\.php|composer\.(json|lock)|phpunit\.xml|.*\.(sql|log|txt|md|bak|old|orig|swp))$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# No directory listings — otherwise a mistyped address would show the contents
+# of a folder instead of a 404.
+Options -Indexes
+
+# Never serve an executable from the uploads folder, whatever lands there.
+<IfModule mod_rewrite.c>
+    RewriteRule ^uploads/.*\.(php|phtml|phar|php[0-9]|phps|cgi|pl|py|shtml)$ - [F,L,NC]
+</IfModule>
+
+# NOTE: the browser security headers (X-Content-Type-Options, Referrer-Policy,
+# X-Frame-Options) are emitted by the application itself, in
+# App\Core\Response::send(), so they are present no matter which web server or
+# hosting panel serves the site. They are deliberately NOT duplicated here:
+# setting them in both places sends each header twice, which some security
+# scanners report as a misconfiguration. Static files that never reach PHP
+# (images, CSS, JS) do not need them; the uploads directory sets its own.

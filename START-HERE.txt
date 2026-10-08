@@ -1,0 +1,313 @@
+================================================================================
+ START HERE — getting your site online
+================================================================================
+
+Everything you need to type is in this file. There are THREE things to do:
+
+    1. upload one folder into the folder your site is served from,
+    2. put four values in config.php,
+    3. open /setup and press one button.
+
+Nothing is copied from one folder to another. There is no key to find or copy:
+the installer asks for nothing but your own name, email address and password.
+
+You will need, from cPanel > Databases > MySQL Databases:
+   - the database name       (looks like  almarf1_almarah_platform)
+   - the database username   (looks like  almarf1_almarah)
+   - the database password
+
+If you have not created those yet, do that first in cPanel > MySQL Databases:
+create a database, create a user, then "Add User To Database" with ALL
+PRIVILEGES.
+
+
+------------------------------------------------------------------------------
+ WHAT IS IN THE ZIP
+------------------------------------------------------------------------------
+        almarah-platform/    one folder, and the whole site. Nothing is
+                             outside it and nothing is copied out of it: you
+                             move this one folder into the folder your site is
+                             served from (public_html, or public_html/donate)
+                             and you are done.
+
+        START-HERE.txt       this file.
+
+No Composer, no Terminal and no commands are needed. You edit one file
+(config.php, step 2) and click one button (step 3). Do those two things while
+you are at the keyboard: until you press that button the setup page is open to
+whoever reaches it, and it closes for good the moment you finish.
+
+
+------------------------------------------------------------------------------
+ STEP 1 — Put the folder in the right place
+------------------------------------------------------------------------------
+  Your site is served from a folder on your account. The site's files have to
+  sit DIRECTLY in that folder — not one folder deeper. That folder is:
+
+    (A) the whole domain            /home/USERNAME/public_html
+    (B) a folder of the domain      /home/USERNAME/public_html/donate
+        (use this if public_html already serves something else — your main
+        almarah.org or softex.pk site, for example)
+
+  cPanel > File Manager, then:
+
+   1. Click "Home" in the left-hand tree. You are in /home/USERNAME — the
+      folder ABOVE public_html, not inside it.
+
+   2. Upload almarah-platform-cpanel.zip here (the Upload button), wait for it
+      to finish, then right-click the zip and choose Extract. You now have:
+
+         /home/USERNAME/almarah-platform        the site, in one folder
+         /home/USERNAME/START-HERE.txt          this file (you can delete it)
+
+   3. Delete the zip file.
+
+   4. Now put that folder where the site is served from.
+
+      (B) A folder of the domain — the usual case, and yours if your site is
+          at https://yourdomain.com/donate:
+
+            - In public_html, create the "donate" folder (Create Folder).
+            - Go back up to /home/USERNAME, select almarah-platform, choose
+              Move, and move it into /home/USERNAME/public_html/donate.
+            - Then rename it: select it again, choose Rename, and call it
+              "donate". (Two clicks: the folder is now the served folder.)
+
+      (A) The whole domain — https://yourdomain.com:
+
+            - Open the almarah-platform folder, select everything in it
+              (Ctrl+A), choose Move, and move it into
+              /home/USERNAME/public_html.
+            - Delete the now-empty almarah-platform folder.
+
+   5. Open the folder your site is served from and check it arrived whole, with
+      File Manager's "Show Hidden Files" switched on (Settings, top right). It
+      must contain:
+
+         index.php        .htaccess        config.php
+         assets/          uploads/         app/  bin/  bootstrap/  config/
+         database/  resources/  routes/  storage/  vendor/
+         composer.json  INSTALL.txt  INSTALL-CPANEL.txt  START-HERE.txt
+
+      "index.php", "assets" and "uploads" sit right next to "app", "config.php"
+      and "vendor" — that is correct and intended: one folder holds both the
+      website and the application, and the .htaccess files keep the private
+      half private.
+
+   6. If your host left an "under construction" page there (index.html,
+      default.php or similar), delete it, or it may be shown instead of your
+      site.
+
+  ----------------------------------------------------------------------------
+  IF THE SITE ENDS UP ONE FOLDER TOO DEEP
+  ----------------------------------------------------------------------------
+  It would be served at https://yourdomain.com/almarah-platform/ or
+  .../donate/almarah-platform/, and the easy fix is: open the inner
+  almarah-platform folder, select everything in it (Ctrl+A), Move it up into
+  the folder you are standing in, then delete the empty almarah-platform
+  folder. The two layouts are otherwise identical.
+
+  ----------------------------------------------------------------------------
+  A NOTE ABOUT HIDDEN FILES
+  ----------------------------------------------------------------------------
+  Some File Manager versions hide or skip dot-files (names starting with a dot)
+  while copying between folders. The .htaccess files are the only reason a
+  visitor cannot download config.php, so after the move, look inside app/,
+  config/, database/, storage/ and vendor/: each must contain a .htaccess. If
+  one is missing, extract the zip again and move the folder once more. The
+  setup page in step 3 also checks this and says so in red if it is wrong.
+
+
+------------------------------------------------------------------------------
+ STEP 2 — Put your four values in config.php  (this is the config file)
+------------------------------------------------------------------------------
+  In File Manager, open:
+
+      config.php        (right-click > Edit)
+
+  and fill in the three database values from cPanel. They must be the FULL
+  names, including your account prefix:
+
+      'db_name' => 'almarf1_almarah_platform',
+      'db_user' => 'almarf1_almarah',
+      'db_pass' => 'the-password-you-chose',
+
+  and, if you chose option (B) in step 1, the site address with the folder in
+  it — it is the address used in emails and where the bank sends donors back to
+  after a payment:
+
+      'site_url' => 'https://yourdomain.com/donate',
+
+  Save the file. That is the only file you ever need to edit.
+
+  Leave 'public_path' EMPTY and leave 'setup_lock' EMPTY. The application works
+  out its own addresses; the two lines are described below and you will not
+  need them:
+
+      'public_path' => ''    a folder on the server, only for unusual hosting;
+                             NEVER a web address
+      'setup_lock'  => ''    normally empty; see "if you cannot install it
+                             straight away" in step 3
+
+
+------------------------------------------------------------------------------
+ STEP 3 — Click "Install my site"
+------------------------------------------------------------------------------
+  1. In your browser, open:      https://yourdomain.com/setup
+     (in a folder:  https://yourdomain.com/donate/setup)
+
+     The page checks your server and tells you if anything is wrong: PHP
+     version, missing extensions, the database, and whether the private files
+     are closed to the web. Fix anything marked with a red cross — for database
+     problems it tells you exactly what to change.
+
+  2. Fill in your name, your email address and a password (10+ characters with
+     at least one letter and one number), then press "Install my site".
+
+     There is no key. That one click creates the database tables, loads the
+     reference data, and makes you the administrator.
+
+  3. Done. Sign in at https://yourdomain.com/login with that email and password.
+
+Your site is now live. The /setup page switches itself off, and it will not run
+a second time — not even if someone deletes its lock file, as long as an
+administrator account exists.
+
+  ----------------------------------------------------------------------------
+  ONE CHECK WHILE YOU ARE ON THAT PAGE
+  ----------------------------------------------------------------------------
+  The checklist shows a link to your own config.php and says it must answer
+  "403 Forbidden". Click it once. If it shows the file's contents instead, your
+  host is ignoring .htaccess rules: stop and read section 17 of
+  INSTALL-CPANEL.txt (one setting to ask your host for). Once it says 403, your
+  database password and the application code are out of the web's reach.
+
+  ----------------------------------------------------------------------------
+  IF YOU CANNOT INSTALL IT STRAIGHT AWAY (optional)
+  ----------------------------------------------------------------------------
+  Anyone who reaches /setup before you finish could create the administrator
+  account for your site. If your address is already public and you have to wait,
+  put any word of your own into the 'setup_lock' line in config.php:
+
+      'setup_lock' => 'almond',
+
+  The setup page then asks for that word before it will install. Empty the line
+  again once you are done and it never asks again. If you forget the word, just
+  empty the line — that is the whole lock, and nothing is lost by it.
+
+
+------------------------------------------------------------------------------
+ WHEN YOU UPDATE THE SITE LATER
+------------------------------------------------------------------------------
+  Put the new files in place of the old ones — in File Manager, extract the new
+  zip in your account home, then move its contents over the installed files
+  (choose "Overwrite" when cPanel asks) — KEEPING these three:
+
+      config.php            your database details
+      storage/app/          your encryption key and installation lock
+      uploads/              images your fundraisers have uploaded
+
+  Uploading the new files into the same folder replaces index.php, assets/ and
+  the application code in one go — there is nothing to copy anywhere. Then open
+  the site and, if the release notes mention a database change, run the
+  migration step they describe.
+
+
+------------------------------------------------------------------------------
+ STEP 4 — Two things worth doing soon
+------------------------------------------------------------------------------
+ a) Turn on HTTPS: cPanel > SSL/TLS Status > Run AutoSSL. Then set your site's
+    address in config.php (it is what tells the bank where to send donors back
+    to after a payment):
+
+      'site_url' => 'https://yourdomain.com',
+
+    Do this BEFORE you switch on a payment gateway: the platform refuses to
+    take an online donation while the address is missing, so that a wrong or
+    spoofed address can never capture a donor's return trip from the bank.
+
+ b) Send receipts automatically. In cPanel > Advanced > Cron Jobs, add:
+
+      cd /home/USERNAME/public_html/donate && /usr/local/bin/php bin/console mail:work --once
+
+    (use the folder you installed into; and "which php" in cPanel Terminal
+    gives the right path — the plain word "php" in cron is often an old
+    version). Set it to run Once Per 5 Minutes. Then fill in your email details
+    in the admin area: Settings > Email / SMTP ("Test connection" tells you if
+    it works).
+
+    Add these two as well when you have a moment:
+
+      ... && php bin/console payments:reconcile        (every 5 minutes)
+      ... && php bin/console maintenance:prune         (once an hour)
+
+
+------------------------------------------------------------------------------
+ IF SOMETHING GOES WRONG
+------------------------------------------------------------------------------
+Every page is 404 except the home page
+    Apache is not reading .htaccess, so the site's addresses (like
+    /fundraisers) are not being routed. Ask your host to enable .htaccess
+    overrides (AllowOverride All) for the folder. Until then only the home page
+    works — and worse, config.php is downloadable, so do not go live. Section
+    17 of INSTALL-CPANEL.txt has the wording to send your host.
+
+Every page says 403 Forbidden, or 500 Internal Server Error
+    Your host rejects something in the .htaccess. cPanel > Metrics > Errors
+    names the line. The two usual ones:
+      "Options not allowed here"     delete the "Options -Indexes" line
+      "Invalid command 'php_flag'"   delete any php_flag/php_value lines (they
+                                     are not in the file as shipped — someone
+                                     added them)
+    Everything else in the file is standard; removing a line does not expose
+    your files as long as the rest stays.
+
+The site has no colours or images
+    The assets folder did not arrive. Open the folder the site is served from
+    and check that "assets" is there, with assets/css/style.css inside it. If
+    not, move the almarah-platform folder into the served folder again,
+    choosing "Overwrite" so the whole folder arrives (step 1).
+
+"The application files are missing from this folder"
+    index.php reached the served folder without the rest of the site beside
+    it — usually because only some files were copied out of the folder. Move
+    the whole almarah-platform folder into the served folder (step 1) instead
+    of copying files out of it.
+
+The page says the site is not installed but I get a white page
+    Open /setup directly. It explains what is missing (usually a database
+    value) in plain English.
+
+The setup page shows a database error
+    It names the exact setting to change, and quotes MySQL when the reason is
+    unusual. The usual causes, in order:
+      1. the database name or username is missing its cPanel prefix
+      2. the password has a typo, or was changed after you copied it
+      3. the database USER was never added to the DATABASE. In cPanel >
+         MySQL Databases, look at "Current Databases" and check your user is
+         listed under that database. If not, use "Add User To Database" with
+         ALL PRIVILEGES. This is the one people miss.
+      4. db_host: try 'localhost', then '127.0.0.1'.
+
+"Already installed" appears but the site is empty
+    You have two copies of the site in your account and you opened the other
+    one. Check the address you are using, and delete the copy you are not
+    using.
+
+I need to start over from an empty database
+    For example because someone else finished the setup for you, or the only
+    administrator was deleted in phpMyAdmin. In cPanel > phpMyAdmin, open your
+    database, select all of its tables and views (about 36 of them), choose
+    Drop and confirm. Then delete the file
+    storage/app/installed.lock, and open /setup again. That is all: the
+    installer recreates everything from scratch, with you as the
+    administrator.
+
+I am locked out of the admin area
+    Wait 15 minutes (sign-in attempts are limited), or use the "forgot
+    password" link on the sign-in page.
+
+Still stuck? The long version of this guide is INSTALL-CPANEL.txt, which has a
+full troubleshooting section and covers servers, cron, backups and security.
+
+================================================================================

@@ -1,0 +1,929 @@
+================================================================================
+ALMARAH FOUNDATION — FUNDRAISING & DONATION PLATFORM
+INSTALLATION GUIDE
+================================================================================
+Application : Almarah Foundation fundraising platform (native PHP MVC)
+Stack       : PHP 8.2+ , MySQL 8 / MariaDB 10.6+ , PDO , Composer
+Document    : INSTALL.txt
+Audience    : system administrator / developer deploying the platform
+
+Read sections 1-3 for a first-time install.
+Sections 7 (web server), 8 (cron) and 10 (verify) are mandatory before go-live.
+Sections 12-13 cover upgrades, backups and rollback.
+
+--------------------------------------------------------------------------------
+IF YOU ARE ON cPANEL OR SHARED HOSTING, READ START-HERE.TXT INSTEAD
+--------------------------------------------------------------------------------
+START-HERE.txt is the short version for shared hosting: upload, fill in three
+values in config.php, click "Install my site". INSTALL-CPANEL.txt is the longer
+cPanel reference, and this file covers server-level deployment (Apache, Nginx,
+systemd workers, tuning).
+
+--------------------------------------------------------------------------------
+CONTENTS
+--------------------------------------------------------------------------------
+ 1. What you receive
+ 2. Server requirements
+ 3. Quick start (development machine, ~5 minutes)
+ 4. Production install, step by step
+ 5. Payment gateway configuration
+ 6. SMTP / email configuration
+ 7. Web server configuration (Apache and Nginx)
+ 8. Scheduled jobs (cron)
+ 9. Folder permissions and file ownership
+10. Post-install verification checklist
+11. Taking the site live (sandbox to production)
+12. Updating the application
+13. Backups and rollback
+14. Troubleshooting
+15. Security notes
+16. Directory map
+
+
+================================================================================
+1. WHAT YOU RECEIVE
+================================================================================
+A single PHP application directory containing:
+
+  app/                application code (controllers, services, repositories,
+                      payments, mail, core framework)
+  bin/console         command-line tool for migrations, seeding, workers
+  bootstrap/          application bootstrapping and service wiring
+  config/             configuration files read at runtime
+  database/migrations SQL schema, applied in numbered order
+  database/seeders    reference data (roles, categories, gateways, templates)
+  index.php           THE WEB ENTRY POINT (the folder itself is the web root)
+  .htaccess           routing rules + refusals for the folders above
+  assets/             css, js and images — public
+  uploads/            fundraiser images — public to read, never executable
+  resources/views     server-rendered templates (public site, dashboards,
+                      admin, transactional email)
+  routes/             route definitions
+  storage/            runtime logs, cache, the encryption key and the
+                      installation lock                              (private)
+  tests/              PHPUnit test suite
+  composer.json       dependency manifest
+  .env.example        environment template — copy to .env and fill in
+
+This folder is the whole site: the web server serves it directly, so index.php,
+assets/ and uploads/ are public while everything else in it — config.php,
+storage/app/app-key.txt, the SQL migrations, the application code — is refused
+by the .htaccess files that ship with it (the main one plus a blanket refusal
+inside every private folder).
+
+  .env is never committed and never served.
+
+Two deployment shapes are supported:
+
+  * single folder (what the package ships): the folder lives in the document
+    root, or in a folder of it, and .htaccess protects the private half. This is
+    the cPanel layout — see INSTALL-CPANEL.txt section 2 and 9.
+  * split (VPS, or a host that will not enable .htaccess): keep the folder
+    outside the document root and point the server at it, or set 'public_path'
+    in config.php to the served directory. Same code, no changes.
+
+
+================================================================================
+2. SERVER REQUIREMENTS
+================================================================================
+Minimum:
+
+  PHP              8.2 or newer (8.3/8.4 recommended)
+  PHP extensions   pdo, pdo_mysql, json, mbstring, openssl, curl, fileinfo,
+                   and the standard ctype / filter / hash extensions
+  GD (php-gd)      strongly recommended: without it uploads still work but
+                   large fundraiser images are not downscaled before storage
+  Database         MySQL 8.0+ or MariaDB 10.6+ (utf8mb4)
+  Composer         2.x
+  Web server       Apache 2.4 with mod_rewrite + mod_headers, or Nginx 1.18+
+  TLS               HTTPS is required in production. Payment gateways and the
+                   session cookie both depend on it.
+  PHP settings     memory_limit >= 256M, upload_max_filesize >= 4M,
+                   post_max_size >= 8M, max_execution_time >= 60,
+                   allow_url_fopen may stay off, display_errors must be OFF
+                   in production.
+
+Optional but recommended:
+
+  - A dedicated system user to own the files (e.g. almarah).
+  - A reverse proxy or load balancer in front of PHP-FPM if you run multiple
+    application servers; set TRUSTED_PROXIES in .env to the proxy addresses so
+    client IPs are read from X-Forwarded-For.
+
+Notes:
+  * The application never uses PHP's mail() function. Email is sent over SMTP
+    (see section 6) and queued in the database.
+  * The application never stores card numbers, CVV or expiry dates. Card data
+    is entered only on the bank's hosted payment page.
+
+
+================================================================================
+3. QUICK START (DEVELOPMENT MACHINE)
+================================================================================
+For a local machine where you just want the site running:
+
+  # 1. Get the code in place
+  cd /var/www/almarah-platform
+
+  # 2. Install PHP dependencies
+  composer install
+
+  # 3. Create the environment file
+  cp .env.example .env
+
+  # 4. Generate an application key and paste it into APP_KEY= in .env
+  php -r 'require "vendor/autoload.php"; echo \App\Core\Crypto::generateAppKey(), PHP_EOL;'
+
+  # 5. Create the database and a dedicated user (MariaDB/MySQL)
+  sudo mysql -e "CREATE DATABASE almarah_platform CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+  sudo mysql -e "CREATE USER 'almarah'@'localhost' IDENTIFIED BY 'CHANGE_ME';"
+  sudo mysql -e "GRANT ALL PRIVILEGES ON almarah_platform.* TO 'almarah'@'localhost';"
+  sudo mysql -e "FLUSH PRIVILEGES;"
+
+  # 6. Point .env at it (DB_DATABASE / DB_USERNAME / DB_PASSWORD)
+
+  # 7. Build the schema and load reference data
+  php bin/console migrate
+  php bin/console db:seed
+
+  # 8. Create the first administrator (interactive, or non-interactive with
+  #    ADMIN_EMAIL / ADMIN_PASSWORD / ADMIN_FIRST_NAME / ADMIN_LAST_NAME)
+  php bin/console make:admin
+
+  # 9. Run it with PHP's built-in server (development only)
+  #    router.php mirrors the .htaccess rules: static files are served, the
+  #    private folders are refused, everything else goes to index.php.
+  php -S 0.0.0.0:8080 router.php
+
+  # 10. Open http://localhost:8080
+
+For development, .env can keep APP_ENV=local, APP_DEBUG=true and
+SESSION_SECURE_COOKIE=false. Never use those values on a public server.
+
+
+================================================================================
+4. PRODUCTION INSTALL, STEP BY STEP
+================================================================================
+4.1  System packages (Debian/Ubuntu example)
+
+  sudo apt update
+  sudo apt install -y \
+      php8.3-cli php8.3-fpm php8.3-mysql php8.3-mbstring php8.3-curl \
+      php8.3-xml php8.3-gd php8.3-intl \
+      mariadb-server nginx unzip git
+  php -m | grep -E 'pdo_mysql|mbstring|curl|openssl|fileinfo'
+
+For Apache instead of Nginx:
+
+  sudo apt install -y apache2 libapache2-mod-php8.3
+  sudo a2enmod rewrite headers
+
+4.2  Place the application
+
+  sudo mkdir -p /var/www/almarah-platform
+  sudo chown -R www-data:www-data /var/www/almarah-platform
+  # copy or clone the release into /var/www/almarah-platform
+
+The folder itself is the web root in this release: index.php, assets/ and
+uploads/ sit next to app/, config.php and storage/, and the .htaccess files that
+ship with it refuse everything private. Point the virtual host at the folder
+(below) and that is the whole layout.
+
+If you prefer the stricter split (code outside the document root), move the
+private folders out and set 'public_path' in config.php to the served folder —
+INSTALL-CPANEL.txt section 17.4 describes the same arrangement.
+
+4.3  Install dependencies (production, no dev packages)
+
+  cd /var/www/almarah-platform
+  composer install --no-dev --optimize-autoloader --no-interaction
+
+4.4  Create the environment file
+
+  cp .env.example .env
+  chmod 640 .env
+  chown www-data:www-data .env
+
+Edit .env and set at minimum:
+
+  APP_ENV=production
+  APP_DEBUG=false
+  APP_URL=https://fundraise.almarah.org
+  APP_TIMEZONE=Asia/Karachi
+  APP_CURRENCY=PKR
+  APP_KEY=<generated key>
+  DB_HOST / DB_PORT / DB_DATABASE / DB_USERNAME / DB_PASSWORD
+  SESSION_SECURE_COOKIE=true
+  SESSION_SAMESITE=Lax
+  MAIL_* (section 6)
+  MEEZAN_* / ETISALAT_* (section 5)
+
+Generate APP_KEY with:
+
+  php -r 'require "vendor/autoload.php"; echo \App\Core\Crypto::generateAppKey(), PHP_EOL;'
+
+The application key encrypts stored gateway and SMTP credentials (AES-256-GCM).
+Changing APP_KEY later makes already-stored credentials unreadable — re-enter
+them in Admin > Settings if you ever rotate the key.
+
+4.5  Create the database and user
+
+  sudo mariadb
+  CREATE DATABASE almarah_platform CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+  CREATE USER 'almarah'@'localhost' IDENTIFIED BY 'a-long-random-password';
+  GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, DROP, REFERENCES
+      ON almarah_platform.* TO 'almarah'@'localhost';
+  FLUSH PRIVILEGES;
+  EXIT;
+
+Nginx/Apache share one host with the database in this example; if the database
+is remote, replace 'localhost' with the application server's address and open
+the port only to that address in your firewall.
+
+Do NOT use the MySQL root account in .env, and do not grant SUPER or
+FILE privileges to the application user.
+
+4.6  Create the schema and seed reference data
+
+  php bin/console migrate
+  php bin/console migrate:status     # confirms every migration is applied
+  php bin/console db:seed
+
+db:seed loads the data the platform needs to function: roles, fundraiser
+categories, the two payment gateway registry rows, the 23 transactional email
+templates, fee/site settings, FAQs and the terms/privacy text. On a production
+database it does not create demo fundraisers or demo donations — the demo
+seeder runs only when APP_ENV is local or testing, or when you ask for it
+explicitly:
+
+  php bin/console db:seed Demo
+
+Re-running db:seed is safe: every reference seeder checks for existing rows and
+will not overwrite content you have edited in the admin.
+
+4.7  Create the first administrator
+
+  php bin/console make:admin
+
+Non-interactive equivalent (useful for automation):
+
+  ADMIN_EMAIL=admin@almarah.org \
+  ADMIN_PASSWORD='a-strong-passphrase-with-digits' \
+  ADMIN_FIRST_NAME=Almarah ADMIN_LAST_NAME=Admin \
+  php bin/console make:admin
+
+The password must be at least 10 characters and contain a letter and a digit.
+To grant administrator rights to an existing account instead:
+
+  php bin/console admin:promote someone@almarah.org admin
+  php bin/console admin:promote someone@almarah.org super_admin
+
+4.8  Permissions
+
+  sudo chown -R www-data:www-data /var/www/almarah-platform
+  sudo find /var/www/almarah-platform -type d -exec chmod 755 {} \;
+  sudo find /var/www/almarah-platform -type f -exec chmod 644 {} \;
+  sudo chmod 640 /var/www/almarah-platform/.env
+  sudo chmod -R 775 /var/www/almarah-platform/storage
+  sudo chmod -R 775 /var/www/almarah-platform/uploads
+
+All PHP code must be read-only for the web user. Only storage/ and uploads/
+are writable. (In the split layout the second path is the served folder's
+uploads/ directory — the same folder the browser reads.)
+
+4.9  Web server and HTTPS
+
+Point the document root at the application folder (single-folder layout) or keep
+the application outside it and set 'public_path' in config.php (split layout,
+INSTALL-CPANEL.txt section 17.4). Either way .htaccess must be honoured:
+AllowOverride All in the <Directory> block, or the equivalent Nginx rules.
+See section 7, then continue to section 8 (cron) and section 10 (verify).
+
+
+================================================================================
+5. PAYMENT GATEWAY CONFIGURATION
+================================================================================
+Two gateways ship with the platform:
+
+  5.1 Meezan Bank — hosted payment page (register.do / getOrderStatus.do)
+  5.2 Etisalat / UBL EPG REST (Registration + Finalization)
+
+Both are configured in two places, and the database values win:
+  * .env — safe defaults, used on a fresh install;
+  * Admin > Settings > <gateway> — credentials entered in the browser are
+    encrypted with APP_KEY and are never shown again.
+
+5.1 MEZZAN BANK
+
+Required values (from your Meezan merchant onboarding pack):
+
+  MEEZAN_ENABLED=true
+  MEEZAN_ENVIRONMENT=sandbox            # switch to live only after testing
+  MEEZAN_SANDBOX_URL=https://sandbox.meezanbank.com/payment
+  MEEZAN_LIVE_URL=https://payment.meezanbank.com/payment
+  MEEZAN_USERNAME=<merchant user name>
+  MEEZAN_PASSWORD=<merchant password>
+  MEEZAN_MERCHANT_ID=<if your account uses one>
+  MEEZAN_CURRENCY_CODE=586              # 586 = PKR (ISO 4217 numeric)
+  MEEZAN_CURRENCY_NAME=PKR
+
+Steps:
+  1. Enter the credentials in .env or in Admin > Settings > Meezan.
+  2. Ask Meezan to whitelist your return URL:
+       https://fundraise.almarah.org/payments/meezan/return
+     The return trip is only a trigger — the platform then calls
+     getOrderStatus.do server-to-server and believes only that answer.
+  3. Click "Test credentials" in Admin > Settings > Meezan. It authenticates
+     against the provider with a harmless order-status lookup; no money moves.
+  4. Confirm the payment page host is on the allowlist. The platform refuses to
+     redirect a donor to a payment URL outside:
+       meezanbank.com, mpay.meezanbank.com, payment.meezanbank.com,
+       sandbox.meezanbank.com
+     Extend it in the gateway settings only if Meezan gives you a different
+     host, and never add a host you have not verified with the bank.
+  5. Refunds are disabled by default. Enable them in gateway settings only
+     after Meezan confirms refund support for your merchant account.
+
+5.2 ETISALAT / UBL EPG
+
+Required values (from your UBL EPG onboarding pack):
+
+  ETISALAT_ENABLED=true
+  ETISALAT_ENVIRONMENT=sandbox
+  ETISALAT_SANDBOX_URL=https://demo-ipg.ctdev.comtrust.ae:2443
+  ETISALAT_LIVE_URL=https://ipg.comtrust.ae:2443
+  ETISALAT_CUSTOMER=<customer id>
+  ETISALAT_USERNAME=<merchant user>
+  ETISALAT_PASSWORD=<merchant password>
+  ETISALAT_STORE=<store id, if issued>      # optional
+  ETISALAT_TERMINAL=<terminal id, if issued> # optional
+  ETISALAT_CURRENCY=PKR
+
+Steps:
+  1. Enter the credentials in .env or Admin > Settings > Etisalat.
+  2. Set the return path with UBL to:
+       https://fundraise.almarah.org/payments/etisalat/return
+  3. Confirm the payment portal hosts are allowlisted:
+       ipg.comtrust.ae, demo-ipg.ctdev.comtrust.ae
+     The EPG returns a PaymentPage URL at registration time; the platform
+     stores it and re-checks the host every time it is used.
+  4. Run the credential test in Admin > Settings > Etisalat.
+  5. Note the EPG flow: registration returns a TransactionID, the donor is sent
+     to /payments/etisalat/bridge/<id> which POSTs that id to the EPG portal.
+     Card details are entered on the EPG page only.
+  6. Confirm with UBL whether your account has Finalization/refund enabled
+     before turning refunds on in settings.
+
+5.3 SHARED PAYMENT RULES (do not change without a developer)
+
+  * A donation is marked completed only after the provider confirms it
+    server-to-server. Nothing the browser sends can complete a donation.
+  * Provider-reported amount and currency must match the stored transaction,
+    otherwise the payment is ignored and flagged.
+  * A completed donation can be refunded but never un-completed.
+  * Duplicate callbacks are detected and ignored; a donation is never counted
+    twice.
+  * Callback amounts are reconciled by the scheduled worker (section 8).
+
+5.4 TESTING PAYMENTS
+
+Use the sandbox environment with test cards issued by the bank. The test suite
+exercises both gateways against a recording transport, so no live credentials
+are needed to validate the integration logic:
+
+  php bin/console payments:health
+
+
+================================================================================
+6. SMTP / EMAIL CONFIGURATION
+================================================================================
+All transactional mail (receipts, verification, password resets, fundraiser
+notifications, team invitations, admin alerts) is sent over SMTP and queued in
+the database, so a mail outage cannot lose a receipt.
+
+  MAIL_MAILER=smtp
+  SMTP_HOST=smtp.yourprovider.com
+  SMTP_PORT=587
+  SMTP_ENCRYPTION=tls            # tls (STARTTLS), ssl, or none
+  SMTP_USERNAME=<smtp user>
+  SMTP_PASSWORD=<smtp password>
+  MAIL_FROM_ADDRESS=fundraise@almarah.org
+  MAIL_FROM_NAME="Almarah Foundation"
+  MAIL_REPLY_TO=info@almarah.org
+  MAIL_QUEUE_ENABLED=true
+  MAIL_MAX_RETRIES=3
+  MAIL_VERIFY_PEER=true          # keep true; false disables certificate checks
+
+Steps:
+  1. Fill in the values above (.env) or Admin > Settings > Email / SMTP.
+  2. In Admin > Settings > Email / SMTP:
+       "Test connection"  — opens and authenticates an SMTP session only.
+       "Send test email"  — sends a real message to the address you enter.
+  3. Make sure the cron job in section 8 that runs mail:work is installed,
+     otherwise queued mail never leaves the queue.
+  4. Check delivery with:
+
+       php bin/console mail:stats
+
+     and review Admin > Email queue for queued / sent / failed counts.
+  5. Set up SPF, DKIM and DMARC for the sending domain, and warm the sending
+     address before a large campaign, otherwise receipts land in spam.
+
+Every email template ships in two parts: an HTML body and a plain-text body.
+Both are sent. Templates are editable in Admin > Email templates; use
+"Reset to default design" to restore the shipped version of a template.
+
+
+================================================================================
+7. WEB SERVER CONFIGURATION
+================================================================================
+7.1 APACHE (with PHP-FPM)
+
+Enable modules and create the virtual host in
+/etc/apache2/sites-available/almarah.conf:
+
+  <VirtualHost *:80>
+      ServerName fundraise.almarah.org
+      Redirect permanent / https://fundraise.almarah.org/
+  </VirtualHost>
+
+  <VirtualHost *:443>
+      ServerName fundraise.almarah.org
+      DocumentRoot /var/www/almarah-platform
+
+      SSLEngine on
+      SSLCertificateFile      /etc/letsencrypt/live/fundraise.almarah.org/fullchain.pem
+      SSLCertificateKeyFile   /etc/letsencrypt/live/fundraise.almarah.org/privkey.pem
+
+      # AllowOverride All is required: the .htaccess that ships with the
+      # release does the routing and refuses the private folders.
+      <Directory /var/www/almarah-platform>
+          Options -Indexes +FollowSymLinks
+          AllowOverride All
+          Require all granted
+      </Directory>
+
+      ErrorLog  ${APACHE_LOG_DIR}/almarah-error.log
+      CustomLog ${APACHE_LOG_DIR}/almarah-access.log combined
+  </VirtualHost>
+
+Then:
+
+  sudo a2ensite almarah && sudo a2enmod rewrite headers ssl
+  sudo apache2ctl configtest && sudo systemctl reload apache2
+
+The site's .htaccess (already in the release) sends everything that is not a
+real file to index.php, refuses the private folders by name (app, bin,
+bootstrap, config, database, resources, routes, storage, vendor) and refuses
+private file types (.env, .sql, .log, .md, .txt, .json, backups) everywhere.
+Each private folder carries its own blanket refusal as well, and
+uploads/.htaccess denies every scriptable extension and switches the PHP handler
+off for that directory, so an uploaded file can never execute. The browser security headers (X-Content-Type-Options,
+Referrer-Policy, X-Frame-Options) are emitted by the application itself rather
+than by the web server, so they are present on Apache, Nginx and any hosting
+panel without extra configuration.
+
+7.2 NGINX (with PHP-FPM)
+
+  server {
+      listen 80;
+      server_name fundraise.almarah.org;
+      return 301 https://$host$request_uri;
+  }
+
+  server {
+      listen 443 ssl http2;
+      server_name fundraise.almarah.org;
+
+      root /var/www/almarah-platform;
+      index index.php;
+
+      ssl_certificate     /etc/letsencrypt/live/fundraise.almarah.org/fullchain.pem;
+      ssl_certificate_key /etc/letsencrypt/live/fundraise.almarah.org/privkey.pem;
+
+      client_max_body_size 8m;
+
+      add_header X-Content-Type-Options "nosniff" always;
+      add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+      add_header X-Frame-Options "SAMEORIGIN" always;
+
+      location / {
+          try_files $uri $uri/ /index.php?$query_string;
+      }
+
+      location ~ \.php$ {
+          include snippets/fastcgi-php.conf;
+          fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+      }
+
+      # Uploaded files are served, never executed.
+      location ^~ /uploads/ {
+          location ~ \.php$ { return 403; }
+      }
+
+      # ----------------------------------------------------------------------
+      # Nginx does NOT read .htaccess, so the refusals that Apache takes from
+      # the release's .htaccess files are repeated here. Without these lines a
+      # request for /config.php would download your database password.
+      # ----------------------------------------------------------------------
+      location ~ /\.(?!well-known) { deny all; }                  # .env, .git
+
+      location ~* ^/(config\.php|composer\.(json|lock)|phpunit\.xml)$ { deny all; }
+
+      location ~* \.(sql|log|md|txt|json|lock|ini|sh|phar|bak|old|orig|swp|example|dist|ne|yml|yaml)$ { deny all; }
+
+      location ~* ^/(app|bin|bootstrap|config|database|deploy|resources|routes|storage|tests|vendor)/ { deny all; }
+
+      access_log /var/log/nginx/almarah-access.log;
+      error_log  /var/log/nginx/almarah-error.log;
+  }
+
+Then:
+
+  sudo nginx -t && sudo systemctl reload nginx
+
+7.3 HTTPS
+Obtain a certificate (Let's Encrypt example):
+
+  sudo apt install -y certbot python3-certbot-nginx
+  sudo certbot --nginx -d fundraise.almarah.org
+
+With Apache:
+
+  sudo apt install -y certbot python3-certbot-apache
+  sudo certbot --apache -d fundraise.almarah.org
+
+Set APP_URL to the https:// address and keep SESSION_SECURE_COOKIE=true.
+
+7.4 PHP-FPM tuning (php.ini or pool config)
+
+  display_errors = Off
+  log_errors = On
+  error_log = /var/log/php/almarah-error.log
+  memory_limit = 256M
+  upload_max_filesize = 4M
+  post_max_size = 8M
+  max_execution_time = 60
+  expose_php = Off
+  session.cookie_httponly = 1
+  session.cookie_secure = 1
+  session.cookie_samesite = Lax
+
+  ; opcache (recommended in production)
+  opcache.enable = 1
+  opcache.memory_consumption = 128
+  opcache.validate_timestamps = 0   ; set to 1 if you deploy by editing files
+  opcache.max_accelerated_files = 10000
+
+
+================================================================================
+8. SCHEDULED JOBS (CRON)
+================================================================================
+Three jobs are required: queued email, payment reconciliation, and housekeeping.
+Run them as the web user so file permissions match.
+
+  sudo crontab -u www-data -e
+
+  # Queued email — every minute
+  * * * * * cd /var/www/almarah-platform && /usr/bin/php bin/console mail:work --once >> storage/logs/mail.log 2>&1
+
+  # Payment reconciliation — every five minutes
+  */5 * * * * cd /var/www/almarah-platform && /usr/bin/php bin/console payments:reconcile >> storage/logs/payments.log 2>&1
+
+  # Housekeeping (expired tokens, stale locks, old logs) — hourly
+  0 * * * * cd /var/www/almarah-platform && /usr/bin/php bin/console maintenance:prune >> storage/logs/maintenance.log 2>&1
+
+  # Fundraiser "ending soon" reminders — daily at 09:00 server time
+  0 9 * * * cd /var/www/almarah-platform && /usr/bin/php bin/console reminders:fundraisers >> storage/logs/reminders.log 2>&1
+
+Alternative: run a long-lived worker under systemd instead of one cron entry per
+minute.
+
+  /etc/systemd/system/almarah-mail.service:
+    [Unit]
+    Description=Almarah mail queue worker
+    After=network.target mariadb.service
+
+    [Service]
+    User=www-data
+    WorkingDirectory=/var/www/almarah-platform
+    ExecStart=/usr/bin/php bin/console mail:work
+    Restart=always
+    RestartSec=5
+
+    [Install]
+    WantedBy=multi-user.target
+
+  sudo systemctl daemon-reload
+  sudo systemctl enable --now almarah-mail
+
+Confirm queue health with:
+
+  php bin/console mail:stats
+  php bin/console payments:reconcile     # prints what it checked and changed
+
+
+================================================================================
+9. FOLDER PERMISSIONS AND FILE OWNERSHIP
+================================================================================
+  /var/www/almarah-platform                 www-data:www-data  755
+  /var/www/almarah-platform/.env            www-data:www-data  640
+  /var/www/almarah-platform/app             www-data:www-data  755 read-only
+  /var/www/almarah-platform/storage         www-data:www-data  775 writable
+  /var/www/almarah-platform/storage/logs    www-data:www-data  775 writable
+  /var/www/almarah-platform/uploads         www-data:www-data  775 writable
+
+  (split layout: the last line is the served folder's uploads/ directory)
+
+Recommended split for stricter setups: code owned by a deploy user and only
+storage/ and uploads/ writable by www-data. The application refuses to write
+anywhere else.
+
+Log files: storage/logs/*.log are rotated by the application's maintenance:prune
+job; set up logrotate if you also want OS-level rotation.
+
+
+================================================================================
+10. POST-INSTALL VERIFICATION CHECKLIST
+================================================================================
+Run these in order. Each line is a pass/fail check.
+
+  [ ] PHP version and extensions
+      php -v
+      php -m | grep -E 'pdo_mysql|mbstring|curl|openssl|fileinfo'
+
+  [ ] Environment file present, not world-readable, key set
+      ls -l .env
+      grep -c '^APP_KEY=base64:' .env        # must print 1
+
+  [ ] Schema is complete
+      php bin/console migrate:status          # no pending migrations
+
+  [ ] Routes are registered
+      php bin/console route:list | wc -l      # dozens of routes, no errors
+
+  [ ] Syntax check of the whole codebase
+      php bin/console lint                    # 0 failures
+
+  [ ] Gateway readiness
+      php bin/console payments:health
+      # Each enabled gateway should read configured=yes for the environment
+      # you intend to use. "configured=no" means credentials are missing.
+
+  [ ] SMTP readiness
+      php bin/console mail:stats
+      # then use Admin > Settings > Email / SMTP > Test connection
+
+  [ ] Home page and key pages return 200
+      curl -sS -o /dev/null -w '%{http_code}\n' https://fundraise.almarah.org/
+      curl -sS -o /dev/null -w '%{http_code}\n' https://fundraise.almarah.org/fundraisers
+      curl -sS -o /dev/null -w '%{http_code}\n' https://fundraise.almarah.org/faq
+      curl -sS -o /dev/null -w '%{http_code}\n' https://fundraise.almarah.org/terms
+
+  [ ] Private files are NOT reachable
+      curl -sS -o /dev/null -w '%{http_code}\n' https://fundraise.almarah.org/.env        # 403 or 404
+      curl -sS -o /dev/null -w '%{http_code}\n' https://fundraise.almarah.org/composer.json
+      curl -sS -o /dev/null -w '%{http_code}\n' https://fundraise.almarah.org/storage/logs  # 404
+
+  [ ] Security headers are present
+      curl -sSI https://fundraise.almarah.org/ | grep -Ei 'x-content-type|x-frame|referrer'
+
+  [ ] Admin sign-in works
+      https://fundraise.almarah.org/login   with the account from make:admin
+      Then check Admin > Dashboard loads without errors.
+
+  [ ] A sandbox donation completes end to end
+      Donate 100 PKR with a test card, confirm the donation shows as
+      "confirmed" in Admin > Donations, and that the amount was added to the
+      fundraiser total exactly once.
+
+  [ ] A receipt email arrives, with a text alternative
+      Check the donor inbox and Admin > Email queue.
+
+  [ ] Cron is alive
+      php bin/console mail:work --once
+      php bin/console payments:reconcile
+      # and confirm storage/logs/mail.log grows after the cron minute passes
+
+  [ ] Test suite passes (staging machine, not production)
+      # create a scratch database first
+      mysql -e "CREATE DATABASE almarah_test CHARACTER SET utf8mb4;"
+      DB_DATABASE=almarah_test vendor/bin/phpunit
+      # the suite rebuilds that schema itself; never point it at live data
+
+
+================================================================================
+11. TAKING THE SITE LIVE (SANDBOX TO PRODUCTION CHECKLIST)
+================================================================================
+  [ ] APP_ENV=production and APP_DEBUG=false, and the debug page returns 404
+  [ ] APP_URL is the public https:// address
+  [ ] Session cookie: SESSION_SECURE_COOKIE=true, SESSION_SAMESITE=Lax
+  [ ] New APP_KEY generated for production (never reuse a dev key) and stored
+      in your secret manager; re-enter gateway and SMTP credentials afterwards
+  [ ] Gateway environment switched from sandbox to live for each gateway
+  [ ] Live credentials entered and the provider has allowlisted your return URL
+  [ ] "Test credentials" run for each live gateway
+  [ ] Refunds left disabled until the bank confirms refund support
+  [ ] Real SMTP host configured, SPF/DKIM/DMARC published
+  [ ] Cron installed and confirmed running for mail, payments and housekeeping
+  [ ] Backups scheduled (section 13) and a restore tested once
+  [ ] Admin accounts reviewed: one super_admin, no shared logins
+  [ ] Legal pages reviewed for your registered charity details (terms, privacy,
+      refund policy) and support contact details updated in Admin > Settings
+  [ ] Fundraiser moderation policy agreed (auto-approve on/off) in
+      Admin > Settings > Site
+  [ ] Monitoring/alerting pointed at storage/logs and the error log
+  [ ] A real 1 PKR live donation made and refunded end to end before launch
+
+
+================================================================================
+12. UPDATING THE APPLICATION
+================================================================================
+  1. Back up the database and .env first (section 13).
+  2. Replace the application files (keep config.php/.env, storage/ and
+     uploads/).
+  3. Install dependencies:
+
+       composer install --no-dev --optimize-autoloader
+
+  4. Apply any new migrations (they are additive and safe to re-run):
+
+       php bin/console migrate
+       php bin/console migrate:status
+
+  5. Re-seed only reference data if the release notes ask for it. db:seed is
+     idempotent for roles, categories, gateways and settings; it does not
+     overwrite content you have edited in the admin.
+
+  6. Clear compiled caches:
+
+       rm -rf storage/cache/*
+
+  7. Reload the web server and PHP-FPM:
+
+       sudo systemctl reload php8.3-fpm nginx     # or apache2
+
+  8. Verify with the checklist in section 10.
+
+Note: migrations are forward-only. A rollback of a schema change is done by
+restoring the database backup from before the update, then deploying the older
+code.
+
+Deploying with a symlink (recommended) shortens rollback to one command:
+
+  /var/www/almarah-platform/releases/2026-10-06-1200/
+  /var/www/almarah-platform/current -> releases/2026-10-06-1200
+  (web root points at /var/www/almarah-platform/current)
+
+Roll back by re-pointing `current` at the previous release and restoring the
+database backup if the release included a migration.
+
+
+================================================================================
+13. BACKUPS AND ROLLBACK
+================================================================================
+What to back up:
+
+  1. The database (donations, fundraisers, users, settings, audit log).
+  2. .env (contains APP_KEY — without it, stored credentials cannot be
+     decrypted).
+  3. uploads/ (fundraiser cover images).
+
+Nightly database dump with retention:
+
+  /etc/cron.daily/almarah-backup:
+    #!/bin/sh
+    set -e
+    DIR=/var/backups/almarah
+    mkdir -p "$DIR"
+    STAMP=$(date +%F-%H%M)
+    mysqldump --single-transaction --routines --triggers \
+      --default-character-set=utf8mb4 \
+      almarah_platform | gzip > "$DIR/almarah_platform-$STAMP.sql.gz"
+    tar -czf "$DIR/uploads-$STAMP.tar.gz" -C /var/www/almarah-platform uploads
+    find "$DIR" -type f -mtime +30 -delete
+
+Protect the dumps: they contain donor names and contact details. Keep them off
+the web server where possible, encrypted, and restrict access.
+
+Restore:
+
+  gunzip -c /var/backups/almarah/almarah_platform-2026-10-06-0300.sql.gz \
+    | mysql -u almarah -p almarah_platform
+
+Then confirm with `php bin/console migrate:status` that the restored schema
+matches the deployed code, and run the verification checklist in section 10.
+
+
+================================================================================
+14. TROUBLESHOOTING
+================================================================================
+"Nothing to migrate" but tables are missing
+  The database user cannot see the schema, or DB_DATABASE points at the wrong
+  database. Check with:
+    php bin/console migrate:status
+
+"SQLSTATE[HY000] [1045] Access denied for user"
+  Wrong DB_USERNAME / DB_PASSWORD, or the user is only granted for a different
+  host ('user'@'localhost' vs 'user'@'127.0.0.1'). Note that DB_HOST=127.0.0.1
+  uses TCP while DB_HOST=localhost may use a socket.
+
+Blank page, HTTP 500, or "Whoops"
+  Set APP_DEBUG=true temporarily to see the error, then set it back to false.
+  Check storage/logs/ and the web server error log. On production, never leave
+  APP_DEBUG=true: it can expose file paths and configuration.
+
+"Refusing to run tests: APP_ENV must be 'testing'"
+  The test suite refuses to run against a live database. Use
+  DB_DATABASE=almarah_test APP_ENV=testing vendor/bin/phpunit, or run the suite
+  on a throw-away environment.
+
+payments:health shows configured=no
+  Credentials for that gateway are missing for the selected environment. Enter
+  them in Admin > Settings > <gateway> or in .env, then re-run the command.
+
+Donors are sent to the provider but returns never complete
+  Most often the provider has not allowlisted your return URL, or the return URL
+  differs from the one registered. Check that
+  https://<your-domain>/payments/meezan/return and
+  https://<your-domain>/payments/etisalat/return are the exact URLs on file with
+  the bank, then confirm the scheduled reconciliation is running:
+    php bin/console payments:reconcile
+
+Payments stuck in "processing"
+  The provider is still deciding, or the callback never arrived. Reconciliation
+  asks the provider directly; an unrecognised provider status is never treated
+  as success. Review Admin > Donations and the callback log for the reason.
+
+Email never arrives
+  In order: SMTP settings correct (Admin > Settings, "Test connection"),
+  mail:work cron running, message present in Admin > Email queue, recipient
+  spam folder, SPF/DKIM configured. php bin/console mail:stats shows queue
+  depth and failures.
+
+Login "too many attempts"
+  The sign-in throttle is 5 attempts per 15 minutes per IP and email. Wait for
+  the window to pass, or clear the rate_limits table if you are locked out
+  during setup.
+
+Uploads fail
+  Check that uploads/ is writable by the web user, that
+  upload_max_filesize/post_max_size are large enough, and that the file type is
+  one of jpeg/jpg/png/webp. The platform stores no other file types.
+
+Cookie / session problems behind a load balancer
+  Set TRUSTED_PROXIES in .env to the proxy addresses so secure-cookie detection
+  and client IPs come from the forwarded headers, and make sure all app servers
+  share the session store or use sticky sessions.
+
+
+================================================================================
+15. SECURITY NOTES
+================================================================================
+  * Keep .env out of version control and out of the web root's reach. It holds
+    APP_KEY, the database password and SMTP/gateway secrets.
+  * The platform encrypts stored gateway and SMTP credentials with APP_KEY
+    (AES-256-GCM); only a hash of callback state tokens is stored.
+  * Never paste real credentials, card numbers or donor data into tickets,
+    screenshots or chat.
+  * Rotate credentials after any suspected exposure, and rotate APP_KEY and
+    re-enter stored credentials if APP_KEY itself was exposed.
+  * Apply OS security updates, and keep PHP/Composer dependencies patched:
+      composer outdated --direct
+      composer audit
+  * Restrict admin access by IP or VPN where practical, and enforce strong
+    unique passwords for staff accounts.
+  * File an incident note with timestamps if you suspect fraud: the audit log
+    in Admin > Audit records who changed what, and payment callbacks are stored
+    with credential-bearing fields already stripped.
+
+
+================================================================================
+16. DIRECTORY MAP (QUICK REFERENCE)
+================================================================================
+  index.php                   front controller (only public PHP entry point)
+  router.php                  PHP built-in server router (development only)
+  .htaccess                   routing + refusals for the private folders
+  assets/                     CSS, JS and images
+  uploads/                    fundraiser images (writable, never executable)
+  bootstrap/app.php           service wiring / container bindings
+  config/*.php                app, database, security, mail, payments
+  database/migrations/*.sql   schema, applied in numeric order
+  database/seeders/*.php      reference data loaders
+  app/Core/                   framework: router, request/response, db, session,
+                              csrf, view, money, crypto, logger
+  app/Http/Controllers/       public, fundraiser and admin controllers
+  app/Services/               business logic (donations, payments, mail, users,
+                              settings, audit)
+  app/Payments/               gateway integrations (Meezan, Etisalat), HTTP
+                              transport, status mapping, refunds
+  app/Mail/                   SMTP transport, queue, templates, mailer
+  app/Repositories/           prepared-statement data access
+  resources/views/            templates (public site, dashboards, admin, email)
+  routes/                     web.php, fundraiser.php, admin.php
+  storage/logs/               application, payment, security and mail logs
+  tests/                      PHPUnit unit + feature tests
+
+================================================================================
+End of installation guide.
+================================================================================

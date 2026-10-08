@@ -1,0 +1,22 @@
+# Private application folder — the web must never serve anything from here.
+#
+# This refusal is repeated in every private folder on purpose: the folder stays
+# closed even if the main .htaccess above is unreadable on some host.
+#
+# A visitor who guesses a path in here gets 403 Forbidden.
+
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>
+
+# Second, independent refusal for hosts where the rules above are ignored.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule .* - [F,L]
+</IfModule>
+
+Options -Indexes

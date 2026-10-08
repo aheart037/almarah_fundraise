@@ -1,0 +1,14 @@
+/.env
+/vendor/
+/storage/logs/*
+!/storage/logs/.gitkeep
+/storage/cache/*
+!/storage/cache/.gitkeep
+/storage/app/*
+!/storage/app/.gitkeep
+/uploads/*
+!/uploads/.gitkeep
+.phpunit.result.cache
+.phpunit.cache/
+*.sqlite
+.DS_Store
