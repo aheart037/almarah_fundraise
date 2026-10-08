@@ -477,8 +477,12 @@ real file to index.php, refuses the private folders by name (app, bin,
 bootstrap, config, database, resources, routes, storage, vendor) and refuses
 private file types (.env, .sql, .log, .md, .txt, .json, backups) everywhere.
 Each private folder carries its own blanket refusal as well, and
-uploads/.htaccess denies every scriptable extension and switches the PHP handler
-off for that directory, so an uploaded file can never execute. The browser security headers (X-Content-Type-Options,
+uploads/.htaccess denies every scriptable extension — twice, by mod_rewrite and
+by FilesMatch — so an uploaded file can never execute. It does not switch the
+PHP engine off with php_flag/SetHandler: on a host that runs PHP as CGI, suPHP
+or FPM those lines are the most common cause of a 500 on every page (section 3.3
+of INSTALL-CPANEL.txt), and refusing the extensions Apache can execute covers the
+same risk on every host. The browser security headers (X-Content-Type-Options,
 Referrer-Policy, X-Frame-Options) are emitted by the application itself rather
 than by the web server, so they are present on Apache, Nginx and any hosting
 panel without extra configuration.

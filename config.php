@@ -58,7 +58,11 @@ return [
     //
     //   correct:  '/home/youruser/public_html/donate'
     //   wrong:    'https://yourdomain.com/donate'
-    'public_path' => ' /home/sophiyaw/softex.pk/donate',
+    // (A value here was ' /home/sophiyaw/softex.pk/donate' — a folder that does
+    // not hold the site, with a stray space in front of it. That sends every
+    // uploaded image somewhere the browser cannot read, and makes the setup
+    // page report the site's own assets as missing. Emptied, as advised.)
+    'public_path' => '',
 
     // LEAVE THIS EMPTY TOO.
     //

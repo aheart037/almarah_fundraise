@@ -33,7 +33,25 @@ use App\Services\UploadService;
 
 $basePath = dirname(__DIR__);
 
-require $basePath . '/vendor/autoload.php';
+// Composer's autoloader is the normal way App\ classes (and PHPMailer) are
+// found. It lives in vendor/, which `composer install` writes and which is not
+// in Git — so a folder copied straight out of the repository, or a zip built
+// without running Composer, has no vendor/autoload.php at all. Requiring it
+// unconditionally made that a PHP fatal on the first line of the boot sequence,
+// before index.php had a chance to catch anything: every page of the site then
+// answered with a bare "can't currently handle this request / HTTP 500", with
+// no message in the log and nothing on screen to explain it.
+//
+// Use Composer's autoloader whenever it exists. When it does not, boot on the
+// built-in fallback so the site still serves pages and the setup page can name
+// the missing step; see bootstrap/autoload-fallback.php.
+$almarahUsesComposer = is_file($basePath . '/vendor/autoload.php');
+
+if ($almarahUsesComposer) {
+    require $basePath . '/vendor/autoload.php';
+} else {
+    require $basePath . '/bootstrap/autoload-fallback.php';
+}
 
 // The simple configuration file (config.php) and the encryption key are set up
 // before the container is built, so every config/*.php file picks them up.
@@ -116,6 +134,20 @@ $app->bind(PaymentGatewayManager::class, static fn (App $c): PaymentGatewayManag
     $c->make(Database::class),
     $c->make(Logger::class)
 ));
+
+// A site running on the fallback autoloader is a site whose dependencies were
+// never installed. Email is the one thing that notices, so say plainly what is
+// missing and where to read about it — in the log the guides point at, rather
+// than as a fatal on every request.
+if (!$almarahUsesComposer) {
+    $app->make(Logger::class)->error(
+        'Dependencies are not installed: vendor/autoload.php is missing, so the'
+        . ' built-in autoloader is being used. Pages work; sending email needs'
+        . ' PHPMailer. Run "composer install --no-dev --optimize-autoloader" in'
+        . ' this folder, or upload the vendor/ folder from a built package.'
+        . ' See START-HERE.txt step 4.'
+    );
+}
 
 // --- routes -----------------------------------------------------------------
 $app->bind(Router::class, static function (App $c) use ($basePath): Router {

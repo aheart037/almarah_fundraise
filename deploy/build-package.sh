@@ -96,13 +96,26 @@ mkdir -p "$staging/almarah-platform/storage/app" \
          "$staging/almarah-platform/uploads"
 
 # The private folders must arrive closed. Their .htaccess is part of the
-# project, so a missing one here would be a build mistake, not a choice.
-for folder in app bin bootstrap config database resources routes storage vendor; do
+# project, so a missing one here is a build mistake in the repository — except
+# for vendor/, which Composer writes and never adds a protection file to. That
+# one used to be required as well, so this script stopped on every fresh
+# checkout with "vendor/.htaccess is missing from the build" and never produced
+# an archive; the folder was then uploaded as Git holds it, without vendor/,
+# and the site answered every request with HTTP 500. It is copied in place of
+# failing.
+for folder in app bin bootstrap config database deploy resources routes storage uploads; do
     if [ ! -f "$staging/almarah-platform/$folder/.htaccess" ]; then
         echo "ERROR: $folder/.htaccess is missing from the build." >&2
         exit 1
     fi
 done
+
+if [ -d "$staging/almarah-platform/vendor" ] \
+   && [ ! -f "$staging/almarah-platform/vendor/.htaccess" ]; then
+    cp "$staging/almarah-platform/app/.htaccess" \
+       "$staging/almarah-platform/vendor/.htaccess"
+    echo "Added the missing vendor/.htaccess (Composer does not ship one)."
+fi
 
 # The instructions that ship beside it.
 cp "$staging/almarah-platform/START-HERE.txt" "$staging/START-HERE.txt"
