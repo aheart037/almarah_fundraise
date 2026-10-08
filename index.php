@@ -39,7 +39,18 @@ use App\Core\View;
 use App\Exceptions\HttpException;
 use App\Exceptions\ValidationException;
 
-$app = require __DIR__ . '/bootstrap/app.php';
+try {
+    // Everything the site needs is wired up in bootstrap/app.php. A failure in
+    // there — a file that is not readable, a dependency that is not installed,
+    // a config value that cannot be parsed — used to escape this script
+    // entirely, because the require was outside the try block below. PHP then
+    // killed the request before any of the application's own reporting ran, and
+    // the browser was left with "can't currently handle this request / HTTP
+    // 500": no page, no hint, and nothing in storage/logs to read.
+    $app = require __DIR__ . '/bootstrap/app.php';
+} catch (\Throwable $bootFailure) {
+    report_boot_failure($bootFailure);
+}
 
 /** @var Logger $logger */
 $logger = $app->make(Logger::class);
@@ -124,6 +135,67 @@ function is_database_problem(Throwable $e): bool
 }
 
 /**
+ * Reports a failure in the boot sequence, before any service exists.
+ *
+ * There is no container, no logger and no view layer to lean on here, and the
+ * one error page that could be rendered without them is plain text. The detail
+ * goes where the installation guides already tell an owner to look: the server
+ * error log, and storage/logs/app-<date>.log.
+ *
+ * What the browser is told depends on whether the site has been installed. In
+ * the middle of an installation nothing is at risk and the owner has to act on
+ * the message, so it is shown in full. Afterwards the same message could name a
+ * file or a setting to a stranger, so the visitor gets a short sentence and the
+ * full text stays in the logs.
+ */
+function report_boot_failure(Throwable $e)
+{
+    $detail = sprintf(
+        'The site could not start: %s in %s on line %d',
+        $e->getMessage(),
+        $e->getFile(),
+        $e->getLine()
+    );
+
+    // error_log() follows the server's own configuration, which on cPanel is
+    // the file the Error Log / Metrics screens show.
+    error_log('[almarah] ' . $detail . "\n" . $e->getTraceAsString());
+
+    $logFile = __DIR__ . '/storage/logs/app-' . gmdate('Y-m-d') . '.log';
+    if (is_dir(dirname($logFile)) && is_writable(dirname($logFile))) {
+        @file_put_contents(
+            $logFile,
+            sprintf("[%s UTC] app.ERROR: %s\n%s\n", gmdate('Y-m-d H:i:s'), $detail, $e->getTraceAsString()),
+            FILE_APPEND | LOCK_EX
+        );
+    }
+
+    $explainInstallation = !is_file(__DIR__ . '/storage/app/installed.lock');
+
+    http_response_code(500);
+    header('Content-Type: text/plain; charset=utf-8');
+    header('X-Content-Type-Options: nosniff');
+    header('Referrer-Policy: strict-origin-when-cross-origin');
+    header('X-Frame-Options: SAMEORIGIN');
+
+    echo "The site could not start.\n\n";
+    echo $explainInstallation
+        ? "This folder has not finished installing, so the reason is shown in full:\n  "
+          . $detail . "\n\n"
+          . "Common causes:\n"
+          . "  * vendor/autoload.php is missing — run: composer install --no-dev --optimize-autoloader\n"
+          . "    in this folder, or upload the vendor/ folder from a built package (START-HERE.txt step 4).\n"
+          . "  * the PHP version selected for this domain is older than 8.2 (MultiPHP Manager).\n"
+          . "  * config.php is not readable, or a file was not uploaded.\n"
+          . "  * storage/ or one of its folders is not writable by the web user.\n"
+        : "Something went wrong while starting the site. The reason has been written to\n"
+          . "the error log of this domain and to storage/logs/, where the exact file and\n"
+          . "line are recorded.\n";
+
+    exit;
+}
+
+/**
  * Renders an error page using the public layout when possible, falling back to
  * a bare safe response when the view layer itself is the problem.
  */
@@ -141,8 +213,15 @@ function render_error($app, int $status, string $message, array $headers = []): 
         $view->share('appName', (string) config('app.name'));
         $view->share('org', config('app.org', []));
 
-        $file = $app->basePath('resources/views/errors/' . $status . '.php');
-        $template = is_file($file) ? 'errors.' . $status : 'errors.generic';
+        // The pages that ship with the site are public/errors/404 (a styled
+        // "no such page") and public/errors/error, which prints the status and
+        // the message and is used for everything else, 500 included. This used
+        // to look in resources/views/errors/ — a folder the application has
+        // never had — so every error page missed, and the plain fallback at the
+        // bottom of this function is what a visitor actually saw.
+        $template = $status === 404 && $view->exists('public/errors/404')
+            ? 'public/errors/404'
+            : 'public/errors/error';
 
         $html = $view->render($template, [
             'status'  => $status,

@@ -166,6 +166,21 @@ final class SetupController extends Controller
             'text' => 'PHP version: ' . PHP_VERSION . ($phpOk ? '' : ' — version 8.2 or newer is required. Ask your host to change it in MultiPHP Manager.'),
         ];
 
+        // The site also boots without Composer: a folder copied straight out of
+        // Git has no vendor/, and refusing to start there is what turned into an
+        // HTTP 500 with nothing to read. Pages work either way; email is the one
+        // thing that needs PHPMailer, so it is named here — while the owner is
+        // still reading this list — rather than after a donation silently fails.
+        $dependenciesInstalled = is_file(app()->basePath('vendor/autoload.php'));
+        $checks[] = [
+            'ok'   => $dependenciesInstalled,
+            'text' => $dependenciesInstalled
+                ? 'Dependencies: vendor/ is installed'
+                : 'Dependencies: vendor/autoload.php is missing, so this site cannot send email.'
+                    . ' Run <em>composer install --no-dev --optimize-autoloader</em> in this folder, or'
+                    . ' upload the vendor/ folder from a built package (START-HERE.txt step 4).',
+        ];
+
         foreach ([
             'pdo_mysql' => 'Database driver (pdo_mysql)',
             'mbstring'  => 'Text handling (mbstring)',

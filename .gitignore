@@ -8,6 +8,10 @@
 !/storage/app/.gitkeep
 /uploads/*
 !/uploads/.gitkeep
+# The protection file must survive a commit: '/uploads/*' above swallows every
+# dotfile in that folder, which is how uploads/.htaccess came to be missing
+# from the packaged site even though both install guides describe it.
+!/uploads/.htaccess
 .phpunit.result.cache
 .phpunit.cache/
 *.sqlite

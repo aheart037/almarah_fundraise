@@ -1,0 +1,36 @@
+# Uploaded files — readable by the browser, never executable.
+#
+# This folder holds what the site writes: fundraiser images. INSTALL.txt and
+# INSTALL-CPANEL.txt both promise this file exists, and the main .htaccess
+# points at it, but it had never been created — so the second layer of the
+# "an upload can never run as a script" rule was missing.
+#
+# The rules below refuse anything that a handler might execute, whatever the
+# name it was given. Files are still served normally: only the scriptable
+# extensions are refused.
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule \.(php|phar|phtml|pht|php[0-9]|phps|cgi|pl|pm|py|sh|bash|exe|com|msi|so|jsp|asp|aspx|htaccess|htpasswd)$ - [F,L,NC]
+</IfModule>
+
+<FilesMatch "\.(php|phar|phtml|pht|php[0-9]|phps|cgi|pl|pm|py|sh|bash|exe|com|msi|so|jsp|asp|aspx|htaccess|htpasswd)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# A mistyped address inside uploads/ must not list the folder's contents.
+Options -Indexes
+
+# NOTE: the PHP engine is deliberately not switched off here with
+#   php_flag engine off   or   SetHandler none
+# Both are the classic cause of a site-wide 500 on a host that runs PHP as
+# CGI/suPHP/FPM (see INSTALL-CPANEL.txt section 3, which is why the package
+# ships no php_flag lines at all). Refusing the scriptable extensions by name
+# achieves the same thing everywhere, and the extensions Apache can execute are
+# exactly the ones listed above.
