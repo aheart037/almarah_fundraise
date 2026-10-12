@@ -24,9 +24,13 @@ final class EtisalatGatewayTest extends TestCase
                 'https://demo-ipg.ctdev.comtrust.ae:2443',
                 self::callback(static function (array $payload): bool {
                     $registration = $payload['Registration'] ?? [];
+                    $orderInfo = $registration['OrderInfo'] ?? null;
                     return ($registration['Amount'] ?? null) === '10.50'
                         && ($registration['TransactionHint'] ?? null) === 'CPT:Y;VCC:Y;'
-                        && ($registration['ReturnPath'] ?? null) === 'https://fundraise.example/payments/etisalat/return';
+                        && ($registration['ReturnPath'] ?? null) === 'https://fundraise.example/payments/etisalat/return'
+                        && is_string($orderInfo)
+                        && strlen($orderInfo) <= 50
+                        && preg_match('/^[A-Za-z0-9 ]*$/D', $orderInfo) === 1;
                 }),
                 self::callback(static function (array $options): bool {
                     return ($options['headers'] ?? []) === ['Accept: text/xml-standard-api'];
@@ -38,7 +42,7 @@ final class EtisalatGatewayTest extends TestCase
                     'ResponseDescription' => 'Registered',
                     'TransactionID' => 'TXN-123',
                     'PaymentPage' => 'https://demo-ipg.ctdev.comtrust.ae/PaymentPage',
-                    'OrderID' => 'ALM-123',
+                    'OrderID' => 'A1B2C3D4',
                 ],
             ], JSON_THROW_ON_ERROR)));
 
@@ -54,13 +58,32 @@ final class EtisalatGatewayTest extends TestCase
         );
     }
 
+    public function testRegistrationRejectsOrderIdWithPunctuation(): void
+    {
+        $http = $this->createMock(HttpClientInterface::class);
+        $http->expects(self::never())->method('postJson');
+
+        $this->expectException(\App\Payments\Exceptions\PaymentGatewayException::class);
+        $this->gateway($http)->register($this->request('ALM-123'));
+    }
+
+    public function testRegistrationRejectsOrderIdLongerThanSixteenCharacters(): void
+    {
+        $http = $this->createMock(HttpClientInterface::class);
+        $http->expects(self::never())->method('postJson');
+
+        $this->expectException(\App\Payments\Exceptions\PaymentGatewayException::class);
+        $this->gateway($http)->register($this->request('12345678901234567'));
+    }
+
     public function testSuccessfulFinalizationRequiresMatchingOrderAndAmount(): void
     {
         $gateway = $this->gatewayWithResponse([
             'ResponseCode' => '0',
             'ResponseDescription' => 'Approved',
+            'ApprovalCode' => 'APPROVED-123',
             'TransactionID' => 'TXN-123',
-            'OrderID' => 'ALM-123',
+            'OrderID' => 'A1B2C3D4',
             'Amount' => '10.500',
             'Currency' => 'PKR',
         ]);
@@ -71,16 +94,32 @@ final class EtisalatGatewayTest extends TestCase
         self::assertSame('completed', $result->status);
         self::assertSame(1050, $result->amountMinor);
         self::assertSame('TXN-123', $result->providerTransactionId);
-        self::assertSame('ALM-123', $result->providerOrderId);
+        self::assertSame('A1B2C3D4', $result->providerOrderId);
+    }
+
+    public function testResponseCodeZeroWithoutApprovalCodeStaysProcessing(): void
+    {
+        $gateway = $this->gatewayWithResponse([
+            'ResponseCode' => '0',
+            'TransactionID' => 'TXN-123',
+            'OrderID' => 'A1B2C3D4',
+            'Amount' => '10.50',
+            'Currency' => 'PKR',
+        ]);
+
+        $result = $gateway->verify($this->verificationContext());
+
+        self::assertFalse($result->verified);
+        self::assertSame('processing', $result->status);
     }
 
     public function testMissingOrMismatchedOrderAndAmountCannotComplete(): void
     {
         $responses = [
-            ['ResponseCode' => '0', 'TransactionID' => 'TXN-123', 'OrderID' => 'OTHER', 'Amount' => '10.50'],
-            ['ResponseCode' => '0', 'TransactionID' => 'TXN-123', 'OrderID' => 'ALM-123', 'Amount' => '10.51'],
-            ['ResponseCode' => '0', 'TransactionID' => 'TXN-123', 'Amount' => '10.50'],
-            ['ResponseCode' => '0', 'TransactionID' => 'TXN-123', 'OrderID' => 'ALM-123'],
+            ['ResponseCode' => '0', 'ApprovalCode' => 'APPROVED-123', 'TransactionID' => 'TXN-123', 'OrderID' => 'OTHER', 'Amount' => '10.50'],
+            ['ResponseCode' => '0', 'ApprovalCode' => 'APPROVED-123', 'TransactionID' => 'TXN-123', 'OrderID' => 'A1B2C3D4', 'Amount' => '10.51'],
+            ['ResponseCode' => '0', 'ApprovalCode' => 'APPROVED-123', 'TransactionID' => 'TXN-123', 'Amount' => '10.50'],
+            ['ResponseCode' => '0', 'ApprovalCode' => 'APPROVED-123', 'TransactionID' => 'TXN-123', 'OrderID' => 'A1B2C3D4'],
         ];
 
         foreach ($responses as $transaction) {
@@ -96,8 +135,9 @@ final class EtisalatGatewayTest extends TestCase
     {
         $gateway = $this->gatewayWithResponse([
             'ResponseCode' => '0',
+            'ApprovalCode' => 'APPROVED-123',
             'TransactionID' => 'TXN-OTHER',
-            'OrderID' => 'ALM-123',
+            'OrderID' => 'A1B2C3D4',
             'Amount' => '10.50',
         ]);
 
@@ -198,13 +238,13 @@ final class EtisalatGatewayTest extends TestCase
         );
     }
 
-    private function request(): PaymentRequest
+    private function request(string $merchantOrderId = 'A1B2C3D4'): PaymentRequest
     {
         return new PaymentRequest(
-            merchantOrderId: 'ALM-123',
+            merchantOrderId: $merchantOrderId,
             amountMinor: 1050,
             currency: 'PKR',
-            description: 'Test donation',
+            description: 'Test donation — ' . str_repeat('fundraiser title ', 5),
             returnUrl: 'https://fundraise.example/payments/etisalat/return',
             callbackUrl: 'https://fundraise.example/payments/etisalat/return',
             idempotencyKey: 'test-idempotency-key',
@@ -216,9 +256,9 @@ final class EtisalatGatewayTest extends TestCase
     private function verificationContext(): array
     {
         return [
-            'providerOrderId' => 'ALM-123',
+            'providerOrderId' => 'A1B2C3D4',
             'providerTransactionId' => 'TXN-123',
-            'merchantOrderId' => 'ALM-123',
+            'merchantOrderId' => 'A1B2C3D4',
             'expectedAmountMinor' => 1050,
             'expectedCurrency' => 'PKR',
         ];

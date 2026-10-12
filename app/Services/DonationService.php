@@ -129,7 +129,7 @@ final class DonationService
                 'status'           => 'pending',
             ]);
 
-            $merchantOrderId = $this->buildMerchantOrderId($reference);
+            $merchantOrderId = $this->buildMerchantOrderId($reference, $gatewayCode);
             $stateTtl = (int) Config::get('payments.callback.state_ttl_minutes', 180);
             $stateExpiresAt = time() + ($stateTtl * 60);
 
@@ -782,9 +782,16 @@ final class DonationService
         return null;
     }
 
-    private function buildMerchantOrderId(string $reference): string
+    private function buildMerchantOrderId(string $reference, string $gatewayCode): string
     {
-        // Alphanumeric only: some gateways reject hyphens and underscores.
+        if ($gatewayCode === 'etisalat') {
+            // UBL's Qurbani implementation documents an EPG OrderID limit of
+            // 16 alphanumeric characters with no punctuation. Keep the
+            // human-facing public_reference separate and send a 64-bit hex ID.
+            return strtoupper(Str::randomHex(8));
+        }
+
+        // Preserve the existing merchant-order format for other gateways.
         return strtoupper(str_replace('-', '', $reference)) . strtoupper(Str::randomHex(2));
     }
 

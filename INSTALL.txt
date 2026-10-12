@@ -391,13 +391,18 @@ Steps:
      entered on the bank-hosted page only.
   5. The EPG returns the donor to ReturnPath with TransactionID. The app matches
      it to the stored transaction, calls Finalization server-to-server, and
-     verifies ResponseCode, OrderID and Amount before marking success. Code 0
-     is success; 210 remains processing; other numeric codes are failures, as
-     in the supplied integration. The EPG source does not define a separate
-     cancellation code, so no response code is guessed to mean cancelled.
-  6. If Finalization cannot be reached or its success response lacks a matching
-     OrderID/Amount, the donation remains processing for reconciliation. A
-     donor who closes the payment page before returning is also left pending.
+     verifies the echoed TransactionID, requires a nonempty ApprovalCode, and
+     checks OrderID and Amount before marking success. OrderID is a random
+     16-character alphanumeric value, fitting the limit noted in the Qurbani
+     implementation. Code 0 with a nonempty ApprovalCode is success; 210 remains
+     processing; other numeric codes are
+     failures, as in the supplied integration. The EPG source does not define
+     a separate cancellation code, so no response code is guessed to mean
+     cancelled.
+  6. If Finalization cannot be reached or its success response lacks a
+     required ApprovalCode or matching transaction/order/amount, the donation
+     remains processing for reconciliation. A donor who closes the payment
+     page before returning is also left pending.
      Confirm with UBL whether Refund is enabled before using refunds.
 
 5.3 SHARED PAYMENT RULES (do not change without a developer)
@@ -407,10 +412,10 @@ Steps:
   * Provider transaction/order references are matched to the stored payment.
     Where a gateway's verification response returns Amount/Currency, a mismatch
     prevents completion.
-  * A successful Etisalat Finalization must echo the expected OrderID and
-    amount. If the response echoes currency it must also match; some EPG
-    Finalization responses omit Currency, which remains bound to the registered
-    transaction.
+  * A successful Etisalat Finalization must include ApprovalCode and echo the
+    expected OrderID and amount. If it echoes currency, it must also match;
+    some EPG Finalization responses omit Currency, which remains bound to the
+    registered transaction.
   * A completed donation can be refunded but never un-completed.
   * Duplicate callbacks are serialized and idempotent; they do not duplicate a
     donation or repeat a definitive failed-payment notification.
@@ -426,10 +431,11 @@ Run the automated unit tests after installing the development dependencies:
 
 Etisalat tests use mocked HTTP responses (no bank call). They cover host-root
 and port construction, legacy /epg/rest normalization, request Accept/TLS
-options, registration fields and hosted-page URL handling, Finalization
-TransactionID/OrderID/amount checks, code 210 pending, and definitive failure
-mapping. They do not validate merchant credentials, live connectivity, the
-bank's test-card behavior, refunds, or a live settlement.
+options, OrderID format/length and ASCII OrderInfo handling, hosted-page URL
+handling, Finalization TransactionID/ApprovalCode/OrderID/amount checks, code
+210 pending, and definitive failure mapping. They do not validate merchant
+credentials, live connectivity, the bank's test-card behavior, refunds, or a
+live settlement.
 
 For a sandbox end-to-end test, use test cards and instructions issued by UBL:
 

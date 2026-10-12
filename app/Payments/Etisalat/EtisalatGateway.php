@@ -105,6 +105,21 @@ final class EtisalatGateway implements PaymentGatewayInterface
         if ($request->amountMinor <= 0) {
             throw new PaymentGatewayException('Donation amount must be positive.', 'etisalat', 'invalid_amount');
         }
+        if (!preg_match('/^[A-Za-z0-9]{1,16}$/D', $request->merchantOrderId)) {
+            throw new PaymentGatewayException(
+                'Etisalat OrderID must contain 1 to 16 alphanumeric characters.',
+                'etisalat',
+                'invalid_order_id'
+            );
+        }
+
+        // Qurbani's working EPG implementation uses a 50-character ASCII
+        // OrderInfo. Keep this merchant detail conservative too.
+        $orderInfo = preg_replace('/[^A-Za-z0-9 ]/', '', $request->description) ?? '';
+        $orderInfo = rtrim(substr(trim(preg_replace('/ +/', ' ', $orderInfo) ?? ''), 0, 50));
+        if ($orderInfo === '') {
+            $orderInfo = 'Donation';
+        }
 
         $block = [
             'Customer'        => (string) ($this->config['customer'] ?? ''),
@@ -113,7 +128,7 @@ final class EtisalatGateway implements PaymentGatewayInterface
             'Currency'        => $currency,
             'OrderID'         => $request->merchantOrderId,
             'OrderName'       => 'Donation',
-            'OrderInfo'       => Str::limit($request->description, 100, ''),
+            'OrderInfo'       => $orderInfo,
             'TransactionHint' => (string) ($this->config['transaction_hint'] ?? 'CPT:Y;VCC:Y;'),
             'ReturnPath'      => $request->returnUrl,
             'UserName'        => (string) ($this->config['username'] ?? ''),
@@ -428,6 +443,27 @@ final class EtisalatGateway implements PaymentGatewayInterface
                 verified: false,
                 providerMessage: $message ?? 'Etisalat Finalization did not return a numeric ResponseCode.',
                 providerTransactionId: $transactionId,
+                safeResponse: $safe
+            );
+        }
+
+        // The supplied bank plugin and Qurbani integration require an
+        // ApprovalCode on a successful Finalization. A code 0 without it is
+        // indeterminate, not proof that this payment may be completed.
+        $approvalCode = $body['ApprovalCode'] ?? null;
+        if ($status === 'completed' && (!is_scalar($approvalCode) || trim((string) $approvalCode) === '')) {
+            $this->logger->security('Etisalat success response omitted ApprovalCode', [
+                'transaction' => $transactionId,
+            ]);
+
+            return new PaymentVerificationResult(
+                gateway: 'etisalat',
+                status: 'processing',
+                verified: false,
+                providerCode: $code,
+                providerMessage: 'Etisalat Finalization did not include an ApprovalCode.',
+                providerTransactionId: $transactionId,
+                providerOrderId: $providerOrderId,
                 safeResponse: $safe
             );
         }
