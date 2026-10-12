@@ -12,6 +12,7 @@ use App\Core\Session;
 use App\Core\View;
 use App\Http\Controllers\Controller;
 use App\Payments\PaymentStateToken;
+use App\Repositories\DonationRepository;
 use App\Repositories\PaymentRepository;
 use App\Services\AuthService;
 use App\Services\DonationService;
@@ -32,6 +33,7 @@ final class PaymentController extends Controller
         Csrf $csrf,
         AuthService $auth,
         private DonationService $donations,
+        private DonationRepository $donationRecords,
         private PaymentRepository $payments,
         private Logger $logger
     ) {
@@ -52,24 +54,32 @@ final class PaymentController extends Controller
     {
         $payload = $request->isPost() ? array_merge($request->all(), $request->json()) : $request->all();
 
-        // Signed state token, issued by us at registration time.
-        $stateToken = (string) ($payload['state'] ?? $payload['token'] ?? '');
+        // Signed state token, issued by us at registration time. Ignore
+        // non-scalar input rather than letting malformed callbacks emit casts
+        // or notices into the response.
+        $stateValue = $payload['state'] ?? $payload['token'] ?? '';
+        $stateToken = is_string($stateValue) || is_int($stateValue) || is_float($stateValue)
+            ? trim((string) $stateValue)
+            : '';
 
         if ($stateToken === '') {
             // Meezan and the EPG both drop unknown query parameters from the
             // return URL, so fall back to whatever identifier they did echo
             // back. This never authorises a status change on its own: it only
             // identifies the transaction whose state we then re-derive.
-            $candidates = [
-                (string) ($payload['merchant_order_id'] ?? ''),
-                (string) ($payload['orderNumber'] ?? ''),
-                (string) ($payload['OrderID'] ?? ''),
-                (string) ($payload['orderId'] ?? ''),
-                (string) ($payload['TransactionID'] ?? ''),
-                (string) ($payload['transactionId'] ?? ''),
-            ];
+            $candidates = [];
+            foreach (['merchant_order_id', 'orderNumber', 'OrderID', 'orderId', 'TransactionID', 'transactionId'] as $key) {
+                $value = $payload[$key] ?? '';
+                if (!is_string($value) && !is_int($value) && !is_float($value)) {
+                    continue;
+                }
+                $candidate = trim((string) $value);
+                if ($candidate !== '') {
+                    $candidates[] = $candidate;
+                }
+            }
 
-            foreach (array_filter($candidates, static fn (string $v): bool => $v !== '') as $candidate) {
+            foreach ($candidates as $candidate) {
                 $transaction = $this->payments->findByMerchantOrderId($candidate)
                     ?? $this->payments->findByProviderTransactionId($gateway, $candidate)
                     ?? $this->payments->findByProviderOrderId($gateway, $candidate);
@@ -86,30 +96,74 @@ final class PaymentController extends Controller
         $this->logger->payment('Gateway return processed', [
             'gateway' => $gateway,
             'outcome' => $result['outcome'],
+            'status'  => $result['status'],
         ]);
 
-        return match ($result['outcome']) {
-            'completed'  => $this->redirect('/donation/success?ref=' . rawurlencode((string) $result['reference'])),
-            'processing' => $this->redirect('/donation/processing?ref=' . rawurlencode((string) $result['reference'])),
-            'cancelled'  => $this->redirect('/donation/failed?ref=' . rawurlencode((string) $result['reference']) . '&reason=cancelled'),
-            'failed'     => $this->redirect('/donation/failed?ref=' . rawurlencode((string) $result['reference']) . '&reason=failed'),
-            'unknown'    => $this->redirect('/donation/failed?reason=unknown'),
-            default      => $this->redirect('/donation/failed?reason=' . rawurlencode($result['outcome'])),
+        // DonationService returns processing outcomes such as "processed",
+        // "duplicate" and "locked" separately from the authoritative database
+        // status. Route by that status and always carry the public reference so
+        // the donor sees the real donation rather than a missing-result page.
+        $status = (string) ($result['status'] ?? '');
+        $reference = trim((string) ($result['reference'] ?? ''));
+        $ref = $reference !== '' ? '?ref=' . rawurlencode($reference) : '';
+
+        return match ($status) {
+            'completed' => $this->redirect('/donation/success' . $ref),
+            'pending', 'processing' => $this->redirect('/donation/processing' . $ref),
+            'cancelled' => $this->redirect('/donation/failed' . $ref . ($ref === '' ? '?' : '&') . 'reason=cancelled'),
+            'failed', 'abandoned' => $this->redirect('/donation/failed' . $ref . ($ref === '' ? '?' : '&') . 'reason=failed'),
+            default => $this->redirect('/donation/failed?reason=' . rawurlencode((string) ($result['outcome'] ?? 'unknown'))),
         };
     }
 
     /**
      * Etisalat hands the payer a form that must be POSTed to its payment page.
-     * We resolve the stored TransactionID server-side and auto-submit it, so
-     * the transaction id is never rendered into a link the donor can edit.
+     * Resolve the compact signed state to a stored transaction server-side and
+     * auto-submit its provider TransactionID; new links do not expose that ID.
      */
     public function etisalatBridge(Request $request): Response
     {
-        $txn = (string) $request->routeParam('txn', '');
-        $transaction = $this->payments->findByProviderTransactionId('etisalat', $txn);
+        $bridgeToken = (string) $request->routeParam('txn', '');
+        $transaction = $bridgeToken !== ''
+            ? $this->payments->findByCallbackState(hash('sha256', $bridgeToken))
+            : null;
+
+        // Compatibility for payment bridge links created before signed-state
+        // URLs were introduced. New bridge URLs never expose TransactionID.
+        if ($transaction === null && $bridgeToken !== '') {
+            $transaction = $this->payments->findByProviderTransactionId('etisalat', $bridgeToken);
+        }
+
+        if ($transaction !== null
+            && (strtolower((string) ($transaction['gateway_code'] ?? '')) !== 'etisalat'
+                || PaymentStateToken::expiryOf($transaction) < time())) {
+            $transaction = null;
+        }
 
         if ($transaction === null) {
-            return $this->render('public/errors/404', ['pageTitle' => 'Payment session not found'], 'layouts/public', 404);
+            // A stale or malformed payment hand-off is not a missing fundraiser.
+            // Keep the donor on a payment-specific result page with next steps.
+            return $this->bridgeError(
+                'Payment session not found',
+                'We could not find this payment session. Return to the donation form to start again. If your bank shows a debit, contact support with your bank transaction reference.',
+                404
+            );
+        }
+
+        $donation = $this->donationRecords->find((int) $transaction['donation_id']);
+        if ($donation === null) {
+            return $this->bridgeError(
+                'Payment session not found',
+                'We could not find this payment session. Return to the donation form to start again. If your bank shows a debit, contact support with your bank transaction reference.',
+                404
+            );
+        }
+
+        // Do not replay a hosted payment page for a finalized donation or a
+        // transaction already marked terminal; show its real stored status.
+        if (!in_array((string) $donation['status'], ['pending', 'processing'], true)
+            || !in_array((string) $transaction['status'], ['pending', 'processing'], true)) {
+            return $this->redirect('/donation/' . rawurlencode((string) $donation['public_reference']));
         }
 
         $gateway = app(\App\Payments\PaymentGatewayManager::class)->gateway('etisalat');
@@ -124,18 +178,19 @@ final class PaymentController extends Controller
                 'reason' => $e->getMessage(),
             ]);
 
-            $this->payments->updateTransaction((int) $transaction['id'], [
-                'status' => 'failed',
-                'provider_response_description' => mb_substr($e->getMessage(), 0, 255),
-            ]);
-
-            $this->flashError('We could not resume that payment. Please start again.');
-            return $this->redirect('/donation/failed?reason=session_expired');
+            return $this->bridgeError(
+                'We could not resume this payment',
+                'This payment session could not be resumed safely. Return to the donation form to start again. If your bank shows a debit, contact support with your bank transaction reference.',
+                409
+            );
         }
 
         if (empty($bridge['action']) || empty($bridge['fields'])) {
-            $this->flashError('We could not resume that payment. Please start again.');
-            return $this->redirect('/donation/failed?reason=session_expired');
+            return $this->bridgeError(
+                'We could not resume this payment',
+                'This payment session could not be resumed safely. Return to the donation form to start again. If your bank shows a debit, contact support with your bank transaction reference.',
+                409
+            );
         }
 
         // Intermediate page: auto-POSTs to the provider and shows a manual
@@ -167,5 +222,18 @@ final class PaymentController extends Controller
 
             return '';
         }
+    }
+
+    private function bridgeError(string $heading, string $message, int $status): Response
+    {
+        return $this->render('public/donate/status', [
+            'pageTitle'    => $heading,
+            'donation'     => null,
+            'transactions' => [],
+            'callbacks'    => [],
+            'expected'     => null,
+            'emptyHeading' => $heading,
+            'donorMessage' => $message,
+        ], 'layouts/public', $status);
     }
 }

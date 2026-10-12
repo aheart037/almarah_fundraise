@@ -269,11 +269,20 @@ final class SettingsController extends Controller
 
         $existing = $this->settings->gatewayConfig($code);
 
+        if ($code === 'etisalat' && array_key_exists('port', $request->all())) {
+            $rawPort = $request->input('port', '');
+            $portValue = is_string($rawPort) || is_int($rawPort) ? (string) $rawPort : '';
+            if ($portValue === '' || !ctype_digit($portValue) || (int) $portValue < 1 || (int) $portValue > 65535) {
+                $this->flashError('The Etisalat API port must be a number between 1 and 65535.');
+                return $this->redirect('/admin/settings#gateway-' . $code);
+            }
+        }
+
         $fields = [];
 
         // Only known fields are accepted; anything else is ignored.
         foreach (['enabled', 'environment', 'username', 'merchant_id', 'customer', 'store', 'terminal',
-                  'currency_code', 'currency_name', 'currency', 'timeout', 'sandbox_url', 'live_url'] as $field) {
+                  'currency_code', 'currency_name', 'currency', 'transaction_hint', 'port', 'timeout', 'sandbox_url', 'live_url'] as $field) {
             if (!array_key_exists($field, $existing) && $field !== 'enabled' && $field !== 'environment') {
                 continue;
             }

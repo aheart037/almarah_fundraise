@@ -346,52 +346,108 @@ Steps:
 
 5.2 ETISALAT / UBL EPG
 
+The request shape and transport below follow the supplied bank WooCommerce
+plugin (EtisalatPay/Request.php and Response.php): HTTPS JSON to the gateway
+host on port 2443, with Content-Type: application/json and
+Accept: text/xml-standard-api. The API URL is the host root; do not append
+/epg/rest. A legacy /epg/rest suffix saved by an earlier release is normalized
+automatically.
+
+Before enabling this update on an existing site, back up the database and run
+`php bin/console migrate`; migration 0007 widens the saved PaymentPage URL field
+so the hosted-page address is not truncated. Confirm with
+`php bin/console migrate:status`.
+
 Required values (from your UBL EPG onboarding pack):
 
   ETISALAT_ENABLED=true
   ETISALAT_ENVIRONMENT=sandbox
-  ETISALAT_SANDBOX_URL=https://demo-ipg.ctdev.comtrust.ae:2443
-  ETISALAT_LIVE_URL=https://ipg.comtrust.ae:2443
+  ETISALAT_SANDBOX_URL=https://demo-ipg.ctdev.comtrust.ae
+  ETISALAT_LIVE_URL=https://ipg.comtrust.ae
+  ETISALAT_PORT=2443
+  ETISALAT_ACCEPT_HEADER=text/xml-standard-api
   ETISALAT_CUSTOMER=<customer id>
   ETISALAT_USERNAME=<merchant user>
   ETISALAT_PASSWORD=<merchant password>
   ETISALAT_STORE=<store id, if issued>      # optional
   ETISALAT_TERMINAL=<terminal id, if issued> # optional
   ETISALAT_CURRENCY=PKR
+  ETISALAT_TRANSACTION_HINT=<exact value issued by UBL>
 
 Steps:
-  1. Enter the credentials in .env or Admin > Settings > Etisalat.
-  2. Set the return path with UBL to:
-       https://fundraise.almarah.org/payments/etisalat/return
-  3. Confirm the payment portal hosts are allowlisted:
-       ipg.comtrust.ae, demo-ipg.ctdev.comtrust.ae
-     The EPG returns a PaymentPage URL at registration time; the platform
-     stores it and re-checks the host every time it is used.
-  4. Run the credential test in Admin > Settings > Etisalat.
-  5. Note the EPG flow: registration returns a TransactionID, the donor is sent
-     to /payments/etisalat/bridge/<id> which POSTs that id to the EPG portal.
-     Card details are entered on the EPG page only.
-  6. Confirm with UBL whether your account has Finalization/refund enabled
-     before turning refunds on in settings.
+  1. Enter credentials in .env or Admin > Settings > Etisalat. The merchant
+     password remains encrypted server-side and is never re-displayed. EPG
+     credentials are sent only in server-side JSON requests and are not logged.
+  2. Give UBL this site's exact return route (include the install subfolder):
+       https://yourdomain.example/payments/etisalat/return
+     The route must accept the gateway's POST containing TransactionID. Keep
+     the full ReturnPath under the EPG's 256-character limit.
+  3. Confirm the EPG API host, port and TransactionHint with UBL. Do not use
+     /epg/rest on the API URL. The PaymentPage is a separate URL returned by
+     Registration; its HTTPS host must be in ETISALAT_ALLOWED_HOSTS.
+  4. Registration creates a pending donation. A compact signed local bridge
+     resolves the stored TransactionID and POSTs it to the stored PaymentPage
+     URL; the provider ID is not put in the new bridge link. Card details are
+     entered on the bank-hosted page only.
+  5. The EPG returns the donor to ReturnPath with TransactionID. The app matches
+     it to the stored transaction, calls Finalization server-to-server, and
+     verifies the echoed TransactionID, requires a nonempty ApprovalCode, and
+     checks OrderID and Amount before marking success. OrderID is a random
+     16-character alphanumeric value, fitting the limit noted in the Qurbani
+     implementation. Code 0 with a nonempty ApprovalCode is success; 210 remains
+     processing; other numeric codes are
+     failures, as in the supplied integration. The EPG source does not define
+     a separate cancellation code, so no response code is guessed to mean
+     cancelled.
+  6. If Finalization cannot be reached or its success response lacks a
+     required ApprovalCode or matching transaction/order/amount, the donation
+     remains processing for reconciliation. A donor who closes the payment
+     page before returning is also left pending.
+     Confirm with UBL whether Refund is enabled before using refunds.
 
 5.3 SHARED PAYMENT RULES (do not change without a developer)
 
   * A donation is marked completed only after the provider confirms it
     server-to-server. Nothing the browser sends can complete a donation.
-  * Provider-reported amount and currency must match the stored transaction,
-    otherwise the payment is ignored and flagged.
+  * Provider transaction/order references are matched to the stored payment.
+    Where a gateway's verification response returns Amount/Currency, a mismatch
+    prevents completion.
+  * A successful Etisalat Finalization must include ApprovalCode and echo the
+    expected OrderID and amount. If it echoes currency, it must also match;
+    some EPG Finalization responses omit Currency, which remains bound to the
+    registered transaction.
   * A completed donation can be refunded but never un-completed.
-  * Duplicate callbacks are detected and ignored; a donation is never counted
-    twice.
-  * Callback amounts are reconciled by the scheduled worker (section 8).
+  * Duplicate callbacks are serialized and idempotent; they do not duplicate a
+    donation or repeat a definitive failed-payment notification.
+  * Indeterminate callback failures stay processing until the scheduled worker
+    can query Finalization again (section 8).
 
 5.4 TESTING PAYMENTS
 
-Use the sandbox environment with test cards issued by the bank. The test suite
-exercises both gateways against a recording transport, so no live credentials
-are needed to validate the integration logic:
+Run the automated unit tests after installing the development dependencies:
+
+  composer install
+  composer test
+
+Etisalat tests use mocked HTTP responses (no bank call). They cover host-root
+and port construction, legacy /epg/rest normalization, request Accept/TLS
+options, OrderID format/length and ASCII OrderInfo handling, hosted-page URL
+handling, Finalization TransactionID/ApprovalCode/OrderID/amount checks, code
+210 pending, and definitive failure mapping. They do not validate merchant
+credentials, live connectivity, the bank's test-card behavior, refunds, or a
+live settlement.
+
+For a sandbox end-to-end test, use test cards and instructions issued by UBL:
 
   php bin/console payments:health
+
+Then test a successful payment, a bank decline/cancel, a donor closing the
+hosted page, a repeated return POST, an invalid/mismatched TransactionID, and a
+Finalization timeout. Confirm the donation record, payment transaction, and
+callback audit log each time. A timeout or missing/mismatched Finalization
+OrderID/amount must remain uncompleted and be retried through reconciliation.
+Do not use live merchant credentials for testing unless UBL and the site owner
+have explicitly scheduled a controlled live test.
 
 
 ================================================================================

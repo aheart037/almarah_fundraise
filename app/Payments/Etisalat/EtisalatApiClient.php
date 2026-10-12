@@ -5,23 +5,28 @@ declare(strict_types=1);
 namespace App\Payments\Etisalat;
 
 use App\Core\Logger;
+use App\Core\Str;
 use App\Payments\Exceptions\PaymentGatewayException;
 use App\Payments\Http\HttpClientInterface;
 use App\Payments\Http\HttpResult;
 
 /**
- * UBL EPG REST transport (Etisalat).
+ * Transport for the Etisalat / UBL EPG REST integration.
  *
- * All operations authenticate with UserName/Password inside the JSON body, as
- * specified by the EPG REST guide. There is no provider HMAC/signature field
- * for these operations, so payloads are never logged and the body is never
- * echoed into an exception.
+ * The bank-provided WooCommerce plugin sends a JSON operation envelope to the
+ * gateway host on port 2443 (no /epg/rest path), with
+ * Content-Type: application/json and Accept: text/xml-standard-api. Credentials
+ * are sent only in the JSON body. TLS peer and hostname verification are kept
+ * enabled; request bodies and credentials are never logged.
  */
 final class EtisalatApiClient
 {
-    public const OP_REGISTRATION  = 'Registration';
-    public const OP_FINALIZATION  = 'Finalization';
-    public const OP_REFUND        = 'Refund';
+    public const OP_REGISTRATION = 'Registration';
+    public const OP_FINALIZATION = 'Finalization';
+    public const OP_REFUND       = 'Refund';
+
+    private const DEFAULT_PORT = 2443;
+    private const DEFAULT_ACCEPT = 'text/xml-standard-api';
 
     public function __construct(
         private HttpClientInterface $http,
@@ -30,31 +35,67 @@ final class EtisalatApiClient
     ) {
     }
 
+    /**
+     * Return the actual API origin used by the bank plugin: HTTPS host:port,
+     * with no REST path. The old application's /epg/rest default is normalized
+     * so existing installations do not need to rewrite their saved setting.
+     */
     public function baseUrl(): string
     {
-        $env = $this->config['environment'] ?? 'sandbox';
-        $url = $env === 'live'
+        $environment = (string) ($this->config['environment'] ?? 'sandbox');
+        $configured = $environment === 'live'
             ? (string) ($this->config['live_url'] ?? '')
             : (string) ($this->config['sandbox_url'] ?? '');
+        $configured = trim($configured);
+        $parts = $configured !== '' ? parse_url($configured) : false;
 
-        $url = rtrim($url, '/');
-        if ($url === '') {
+        if (!is_array($parts)
+            || strtolower((string) ($parts['scheme'] ?? '')) !== 'https'
+            || !isset($parts['host'])
+            || isset($parts['user'])
+            || isset($parts['pass'])
+            || isset($parts['query'])
+            || isset($parts['fragment'])) {
             throw new PaymentGatewayException(
-                'Etisalat EPG base URL is not configured for the ' . $env . ' environment.',
+                'Etisalat EPG must be configured with an HTTPS gateway host and optional port.',
                 'etisalat',
-                'not_configured'
+                'invalid_endpoint'
             );
         }
 
-        // Appendix B's REST endpoint is /epg/rest. Older saved settings and
-        // .env files may contain only the host; preserve an explicit REST or
-        // reverse-proxy path, but complete a host-only URL automatically.
-        $path = parse_url($url, PHP_URL_PATH);
-        if (!is_string($path) || $path === '' || $path === '/') {
-            $url .= '/epg/rest';
+        $path = rtrim((string) ($parts['path'] ?? ''), '/');
+        if (strcasecmp($path, '/epg/rest') === 0) {
+            // Compatibility with the incorrect path used by the earlier PHP
+            // implementation; the supplied WooCommerce client posts to root.
+            $path = '';
+        }
+        if ($path !== '' && $path !== '/') {
+            throw new PaymentGatewayException(
+                'Etisalat EPG expects its API URL to be the gateway host, without an API path.',
+                'etisalat',
+                'invalid_endpoint_path'
+            );
         }
 
-        return $url;
+        // Preserve an explicit port from a saved URL; host-only configuration
+        // uses the separate merchant port setting (2443 by default).
+        $port = isset($parts['port'])
+            ? (int) $parts['port']
+            : (int) ($this->config['port'] ?? self::DEFAULT_PORT);
+        if ($port < 1 || $port > 65535) {
+            throw new PaymentGatewayException(
+                'Etisalat EPG API port must be between 1 and 65535.',
+                'etisalat',
+                'invalid_endpoint_port'
+            );
+        }
+
+        $host = (string) $parts['host'];
+        if (str_contains($host, ':') && !str_starts_with($host, '[')) {
+            $host = '[' . $host . ']';
+        }
+
+        return 'https://' . $host . ':' . $port;
     }
 
     private function timeout(): int
@@ -71,18 +112,30 @@ final class EtisalatApiClient
     public function send(string $operation, array $payload): array
     {
         $url = $this->baseUrl();
+        $accept = trim((string) ($this->config['accept_header'] ?? self::DEFAULT_ACCEPT));
+        if (!in_array($accept, ['text/xml-standard-api', 'application/json'], true)) {
+            throw new PaymentGatewayException(
+                'Etisalat Accept header must be text/xml-standard-api or application/json.',
+                'etisalat',
+                'invalid_accept_header'
+            );
+        }
+
+        $tls12 = defined('CURL_SSLVERSION_TLSv1_2')
+            ? (int) constant('CURL_SSLVERSION_TLSv1_2')
+            : 6; // cURL's documented numeric value for TLS 1.2.
 
         $result = $this->http->postJson($url, $payload, [
             'timeout'         => $this->timeout(),
             'connect_timeout' => min(10, $this->timeout()),
+            'tls_version'     => $tls12,
+            'forbid_reuse'    => true,
             'headers'         => [
-                'Accept: application/json',
-                'Content-Type: application/json',
+                'Accept: ' . $accept,
             ],
         ]);
 
-        $host = \App\Core\Str::host($url) ?? 'unset';
-
+        $host = Str::host($url) ?? 'unset';
         $this->logger->payment('Etisalat API call completed', [
             'operation' => $operation,
             'host'      => $host,
@@ -104,6 +157,15 @@ final class EtisalatApiClient
             );
         }
 
+        if ($result->statusCode === 404) {
+            throw new PaymentGatewayException(
+                'Etisalat returned HTTP 404. Check the configured gateway host and API port; the bank integration uses the host root, not /epg/rest.',
+                'etisalat',
+                'endpoint_not_found',
+                $result->statusCode
+            );
+        }
+
         if ($result->statusCode >= 500) {
             throw new PaymentGatewayException(
                 'Etisalat returned a server error (HTTP ' . $result->statusCode . ').',
@@ -114,17 +176,8 @@ final class EtisalatApiClient
         }
 
         if (!$result->isJson()) {
-            if ($result->statusCode === 404) {
-                throw new PaymentGatewayException(
-                    'Etisalat returned HTTP 404. Check that the selected sandbox/live REST URL points to the UBL EPG /epg/rest endpoint.',
-                    'etisalat',
-                    'endpoint_not_found',
-                    $result->statusCode
-                );
-            }
-
             throw new PaymentGatewayException(
-                'Etisalat returned a non-JSON response (HTTP ' . $result->statusCode . ').',
+                'Etisalat returned a non-JSON response for ' . $operation . ' (HTTP ' . $result->statusCode . ').',
                 'etisalat',
                 'invalid_json',
                 $result->statusCode
@@ -134,7 +187,7 @@ final class EtisalatApiClient
         $decoded = $result->json();
         if ($decoded === []) {
             throw new PaymentGatewayException(
-                'Etisalat returned an empty JSON object.',
+                'Etisalat returned an empty JSON response.',
                 'etisalat',
                 'empty_response',
                 $result->statusCode
@@ -145,7 +198,9 @@ final class EtisalatApiClient
     }
 
     /**
-     * Extract the operation block and its response code from a provider reply.
+     * Extract the Transaction object and its documented response fields.
+     * The EPG response normally wraps fields in Transaction; a root-level
+     * Transaction response is tolerated for older merchant configurations.
      *
      * @param array<string,mixed> $response
      * @return array{block:array<string,mixed>, code:?string, message:?string}
@@ -154,59 +209,83 @@ final class EtisalatApiClient
     {
         foreach ($response as $key => $value) {
             if (strcasecmp((string) $key, 'Error') === 0 && is_array($value)) {
-                $error = array_change_key_case($value, CASE_LOWER);
-                $code = $error['responsecode'] ?? $error['response'] ?? $error['status'] ?? null;
-                $message = $error['responsedescription'] ?? $error['description'] ?? $error['message'] ?? null;
-
-                return [
-                    'block'   => [],
-                    'code'    => is_scalar($code) ? (string) $code : null,
-                    'message' => is_scalar($message) ? (string) $message : 'Provider reported an error.',
-                ];
+                return $this->extractBlock($value);
             }
         }
 
-        // The EPG guide wraps Registration, Finalization and Refund responses
-        // in a shared Transaction object (not in the request operation name).
-        // Continue accepting operation-specific blocks for older EPG versions.
         $block = null;
         foreach ($response as $key => $value) {
-            if (strcasecmp((string) $key, $operation) === 0 && is_array($value)) {
+            if (strcasecmp((string) $key, 'Transaction') === 0 && is_array($value)) {
                 $block = $value;
                 break;
             }
         }
+
+        // Some versions return the Transaction fields at the root. Accept only
+        // the documented ResponseCode field; do not guess from a generic
+        // "status" or "response" field.
+        if ($block === null && $this->hasCaseInsensitiveKey($response, 'ResponseCode')) {
+            $block = $response;
+        }
+
         if ($block === null) {
-            foreach ($response as $key => $value) {
-                if (strcasecmp((string) $key, 'Transaction') === 0 && is_array($value)) {
-                    $block = $value;
-                    break;
-                }
+            return [
+                'block' => [],
+                'code' => null,
+                'message' => 'Etisalat response did not contain a Transaction or ResponseCode.',
+            ];
+        }
+
+        return $this->extractBlock($block);
+    }
+
+    /** @param array<string,mixed> $block @return array{block:array<string,mixed>, code:?string, message:?string} */
+    private function extractBlock(array $block): array
+    {
+        $fields = array_change_key_case($block, CASE_LOWER);
+        $rawCode = $fields['responsecode'] ?? null;
+        $code = null;
+        if (is_scalar($rawCode)) {
+            $candidate = trim((string) $rawCode);
+            if ($candidate !== '' && ctype_digit($candidate)) {
+                $code = $candidate;
             }
         }
 
-        if ($block === null && (isset($response['ResponseCode']) || isset($response['Response']))) {
-            $block = $response;
-        }
-        if ($block === null) {
-            return ['block' => [], 'code' => null, 'message' => 'Provider response did not contain a Transaction block.'];
+        $rawMessage = $fields['responsedescription'] ?? $fields['responseclassdescription'] ?? null;
+        $message = is_scalar($rawMessage) ? trim((string) $rawMessage) : null;
+        if ($message === '') {
+            $message = null;
         }
 
-        $fields = array_change_key_case($block, CASE_LOWER);
-        $code = $fields['responsecode'] ?? $fields['response'] ?? $fields['status'] ?? null;
-        $message = $fields['responsedescription'] ?? $fields['description'] ?? $fields['message'] ?? null;
+        if ($code === null && $message === null) {
+            $message = 'Etisalat response did not contain a numeric ResponseCode.';
+        }
 
         return [
             'block'   => $block,
-            'code'    => is_scalar($code) ? (string) $code : null,
-            'message' => is_scalar($message) ? (string) $message : null,
+            'code'    => $code,
+            'message' => $message,
         ];
+    }
+
+    /** @param array<string,mixed> $array */
+    private function hasCaseInsensitiveKey(array $array, string $needle): bool
+    {
+        foreach (array_keys($array) as $key) {
+            if (strcasecmp((string) $key, $needle) === 0) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public function describe(): string
     {
-        $env = (string) ($this->config['environment'] ?? 'sandbox');
-        $host = \App\Core\Str::host($this->config[$env === 'live' ? 'live_url' : 'sandbox_url'] ?? '');
-        return sprintf('Etisalat EPG (%s, %s)', $env, $host ?? 'unset');
+        $environment = (string) ($this->config['environment'] ?? 'sandbox');
+        $urlKey = $environment === 'live' ? 'live_url' : 'sandbox_url';
+        $host = Str::host((string) ($this->config[$urlKey] ?? ''));
+
+        return sprintf('Etisalat EPG (%s, %s)', $environment, $host ?? 'unset');
     }
 }

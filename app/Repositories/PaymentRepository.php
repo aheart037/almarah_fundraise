@@ -41,7 +41,7 @@ final class PaymentRepository
     public function updateTransaction(int $id, array $data): void
     {
         $allowed = [
-            'provider_transaction_id', 'provider_unique_id', 'provider_order_id',
+            'provider_transaction_id', 'provider_unique_id', 'provider_order_id', 'provider_payment_page_url',
             'provider_response_code', 'provider_response_description', 'status',
             'amount_minor', 'currency', 'registered_at', 'callback_received_at',
             'finalized_at', 'completed_at', 'refunded_at', 'last_reconciled_at',

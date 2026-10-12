@@ -115,13 +115,16 @@ $faviconUrl = site_brand_asset('site.favicon');
         </div>
       </div>
 
-      <?php foreach (['customer', 'store', 'terminal', 'merchant_id', 'currency_code', 'currency_name', 'currency'] as $field): ?>
+      <?php foreach (['customer', 'store', 'terminal', 'transaction_hint', 'merchant_id', 'currency_code', 'currency_name', 'currency'] as $field): ?>
         <?php if (!array_key_exists($field, $config)) { continue; } ?>
         <div class="form-row">
           <div class="field">
             <label for="<?= e($code . '_' . $field) ?>"><?= e(ucwords(str_replace('_', ' ', $field))) ?></label>
             <input class="input" type="text" id="<?= e($code . '_' . $field) ?>" name="<?= e($field) ?>"
                    value="<?= e((string) $config[$field]) ?>" autocomplete="off">
+            <?php if ($code === 'etisalat' && $field === 'transaction_hint'): ?>
+              <span class="form-help">Use the exact TransactionHint supplied for this merchant account. The default is CPT:Y;VCC:Y;.</span>
+            <?php endif; ?>
           </div>
           <div class="field">&nbsp;</div>
         </div>
@@ -129,18 +132,32 @@ $faviconUrl = site_brand_asset('site.favicon');
 
       <div class="form-row">
         <div class="field">
-          <label for="<?= e($code) ?>_sandbox_url"><?= $code === 'etisalat' ? 'Sandbox REST endpoint' : 'Sandbox endpoint' ?></label>
+          <label for="<?= e($code) ?>_sandbox_url"><?= $code === 'etisalat' ? 'Sandbox gateway host' : 'Sandbox endpoint' ?></label>
           <input class="input mono" type="url" id="<?= e($code) ?>_sandbox_url" name="sandbox_url" value="<?= e((string) ($config['sandbox_url'] ?? '')) ?>">
           <?php if ($code === 'etisalat'): ?>
-            <span class="form-help">UBL EPG uses the /epg/rest path. It is added automatically when only the host is configured.</span>
+            <span class="form-help">Use the gateway host/base URL. The bank WooCommerce integration POSTs to its root on the configured port; do not add an API path. A previously saved /epg/rest suffix is removed automatically.</span>
           <?php endif; ?>
         </div>
         <div class="field">
-          <label for="<?= e($code) ?>_live_url"><?= $code === 'etisalat' ? 'Live REST endpoint' : 'Live endpoint' ?></label>
+          <label for="<?= e($code) ?>_live_url"><?= $code === 'etisalat' ? 'Live gateway host' : 'Live endpoint' ?></label>
           <input class="input mono" type="url" id="<?= e($code) ?>_live_url" name="live_url" value="<?= e((string) ($config['live_url'] ?? '')) ?>">
           <span class="form-help">Payment-page hosts returned by the gateway are checked against its allowlist.</span>
         </div>
       </div>
+
+      <?php if ($code === 'etisalat'): ?>
+        <div class="form-row">
+          <div class="field">
+            <label for="etisalat_port">EPG API port</label>
+            <input class="input" type="number" id="etisalat_port" name="port" min="1" max="65535" required value="<?= e((string) (int) ($config['port'] ?? 2443)) ?>">
+            <span class="form-help">The supplied bank plugin uses port 2443 (TLS 1.2). Change it only if the bank confirms a different port. An explicit port in either gateway URL takes precedence.</span>
+          </div>
+          <div class="field">
+            <label>Request format</label>
+            <p class="form-help">JSON body; Accept: <?= e((string) ($config['accept_header'] ?? 'text/xml-standard-api')) ?>; TLS certificate verification stays enabled.</p>
+          </div>
+        </div>
+      <?php endif; ?>
 
       <div class="form-row">
         <div class="field">
