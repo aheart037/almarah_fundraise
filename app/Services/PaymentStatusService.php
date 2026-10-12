@@ -57,6 +57,19 @@ final class PaymentStatusService
             return ['changed' => false, 'status' => $current, 'reason' => 'already_terminal'];
         }
 
+        // A repeated definitive failure/cancellation is idempotent. Keep the
+        // latest gateway response for reconciliation, but do not repeat donor
+        // notifications or write the same terminal donation transition twice.
+        if ($target === $current && in_array($current, ['failed', 'cancelled', 'abandoned'], true)) {
+            $this->payments->updateTransaction((int) $transaction['id'], [
+                'provider_response_code'        => $result->providerCode,
+                'provider_response_description'=> $this->truncate($result->providerMessage),
+                'last_reconciled_at'            => gmdate('Y-m-d H:i:s'),
+            ]);
+
+            return ['changed' => false, 'status' => $current, 'reason' => 'already_' . $current];
+        }
+
         if (!$result->verified) {
             // Record the provider response for reconciliation without changing
             // the donation's status.

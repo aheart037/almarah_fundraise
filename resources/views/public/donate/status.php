@@ -9,6 +9,7 @@
  * @var array $transactions
  * @var string|null $donorMessage
  * @var string|null $expected
+ * @var string|null $emptyHeading
  */
 
 $currency = (string) ($donation['currency'] ?? 'PKR');
@@ -24,6 +25,7 @@ $presentation = [
 ];
 
 $status = (string) ($donation['status'] ?? '');
+$emptyHeading = (string) ($emptyHeading ?? 'We could not find that donation');
 $view = $presentation[$status] ?? ['class' => 'alert-info', 'icon' => 'info', 'heading' => 'Donation status', 'blurb' => ''];
 
 $icons = [
@@ -40,7 +42,7 @@ $icons = [
         <div class="tick" style="background:#fdeceb;color:#a3231b">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
         </div>
-        <h1>We could not find that donation</h1>
+        <h1><?= e($emptyHeading) ?></h1>
         <p><?= e((string) ($donorMessage ?? 'Check the link in your receipt email, or contact our team with the reference from your bank statement.')) ?></p>
         <div class="cta-actions">
           <a class="btn btn-brand" href="<?= e(base_url('fundraisers')) ?>">Browse fundraisers</a>

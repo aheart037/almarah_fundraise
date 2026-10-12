@@ -33,14 +33,14 @@ final class PaymentStatusMapper
     ];
 
     /**
-     * Etisalat / UBL EPG Finalization response codes.
-     * 0 = successful, 210 = in progress, 112 = cancelled.
-     * Any other non-zero code is a failure.
+     * Etisalat / UBL EPG Finalization response codes confirmed by the supplied
+     * integration: 0 = successful; 210 = pending settlement. The bank plugin
+     * treats every other numeric response code as a failure; no separate
+     * cancellation code is specified in that source, so none is guessed here.
      */
     private const ETISALAT_STATUS_MAP = [
         '0'   => 'completed',
         '210' => 'processing',
-        '112' => 'cancelled',
     ];
 
     public function __construct(private array $config = [])
@@ -58,14 +58,10 @@ final class PaymentStatusMapper
     }
 
     /**
-     * The EPG's failure codes are a documented, open-ended numeric range: any
-     * non-zero numeric code other than "in progress" (210) and "cancelled"
-     * (112) means the transaction did not go through. Mapping those to
-     * `failed` gives the donor an honest answer instead of leaving the
-     * donation in limbo — and it can never mark anything as paid, because
-     * `failed` is not a success state.
-     *
-     * A blank or non-numeric code carries no verdict at all, so it stays
+     * The supplied bank plugin treats every numeric Finalization code other
+     * than 0 (success) and 210 (pending settlement) as a failed transaction.
+     * Keep that documented behavior without inventing a separate cancellation
+     * code. A blank or non-numeric response carries no verdict and stays
      * `processing` until reconciliation asks the provider again.
      */
     private static function etisalatUnknownIsFailure(string $code): bool

@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Public;
 use App\Core\Config;
 use App\Core\Csrf;
 use App\Core\Logger;
+use App\Core\Money;
 use App\Core\Request;
 use App\Core\Response;
 use App\Core\Session;
@@ -102,13 +103,24 @@ final class DonationController extends Controller
             return $this->flashFormState($validator->errors(), $request->all());
         }
 
-        $amount = (string) $request->input('amount');
-        if (!is_numeric($amount) || (float) $amount <= 0) {
+        $rawAmount = $request->input('amount');
+        if (!is_string($rawAmount) && !is_int($rawAmount) && !is_float($rawAmount)) {
             return $this->flashFormState(['amount' => 'Enter a valid donation amount in rupees.'], $request->all());
         }
 
-        // Rupees in the form, integer minor units everywhere else.
-        $amountMinor = (int) round(((float) $amount) * 100);
+        // Rupees in the form, integer minor units everywhere else. Parse
+        // strictly (at most two decimal places) rather than through a float.
+        try {
+            $amountMinor = Money::fromProviderString((string) $rawAmount);
+        } catch (InvalidArgumentException) {
+            return $this->flashFormState(
+                ['amount' => 'Enter a valid donation amount in rupees, using no more than two decimal places.'],
+                $request->all()
+            );
+        }
+        if ($amountMinor <= 0) {
+            return $this->flashFormState(['amount' => 'Enter a valid donation amount in rupees.'], $request->all());
+        }
 
         $gatewayCode = (string) $request->input('gateway');
         if (!in_array($gatewayCode, $this->gateways->availableCodes(), true)) {

@@ -36,17 +36,24 @@ return [
 
         'etisalat' => [
             'label'       => 'Etisalat / UBL EPG',
-            'description' => 'Etisalat (UBL EPG REST) card processing via Registration + Finalization.',
+            'description' => 'Etisalat (UBL EPG) hosted card processing via Registration + Finalization.',
             'enabled'     => (bool) Env::get('ETISALAT_ENABLED', false),
             'environment' => Env::get('ETISALAT_ENVIRONMENT', 'sandbox'),
-            'sandbox_url' => Env::get('ETISALAT_SANDBOX_URL', 'https://demo-ipg.ctdev.comtrust.ae:2443/epg/rest'),
-            'live_url'    => Env::get('ETISALAT_LIVE_URL', 'https://ipg.comtrust.ae:2443/epg/rest'),
+            // The bank-provided WooCommerce client POSTs JSON to the gateway
+            // host on port 2443 (no /epg/rest path). A legacy /epg/rest suffix
+            // is normalized for existing saved settings.
+            'sandbox_url' => Env::get('ETISALAT_SANDBOX_URL', 'https://demo-ipg.ctdev.comtrust.ae'),
+            'live_url'    => Env::get('ETISALAT_LIVE_URL', 'https://ipg.comtrust.ae'),
+            'port'        => (int) Env::get('ETISALAT_PORT', 2443),
             'customer'    => Env::get('ETISALAT_CUSTOMER', ''),
             'username'    => Env::secret('ETISALAT_USERNAME'),
             'password'    => Env::secret('ETISALAT_PASSWORD'),
             'store'       => Env::get('ETISALAT_STORE', ''),
             'terminal'    => Env::get('ETISALAT_TERMINAL', ''),
             'currency'    => Env::get('ETISALAT_CURRENCY', 'PKR'),
+            'transaction_hint' => Env::get('ETISALAT_TRANSACTION_HINT', 'CPT:Y;VCC:Y;'),
+            // The supplied bank WooCommerce plugin uses this Accept value.
+            'accept_header' => Env::get('ETISALAT_ACCEPT_HEADER', 'text/xml-standard-api'),
             'timeout'     => (int) Env::get('ETISALAT_TIMEOUT', 30),
             'allowed_hosts' => array_filter(array_map('trim', explode(',', (string) Env::get(
                 'ETISALAT_ALLOWED_HOSTS',

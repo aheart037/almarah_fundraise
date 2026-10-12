@@ -165,7 +165,10 @@ final class DonationService
                 customerName: (string) $input['name'],
                 customerEmail: (string) $input['email'],
                 customerIp: $input['ip'] ?? null,
-                metadata: ['donation_reference' => $reference]
+                metadata: [
+                    'donation_reference' => $reference,
+                    'callback_state'     => $callbackState,
+                ]
             );
 
             try {
@@ -244,9 +247,7 @@ final class DonationService
                 'provider_transaction_id'   => $registration->providerTransactionId,
                 'provider_order_id'         => $registration->providerOrderId,
                 'provider_unique_id'        => $registration->providerUniqueId,
-                'provider_payment_page_url' => $registration->providerPaymentPageUrl !== null
-                    ? mb_substr($registration->providerPaymentPageUrl, 0, 255)
-                    : null,
+                'provider_payment_page_url' => $registration->providerPaymentPageUrl,
                 'provider_response_code'    => $registration->providerCode,
                 'provider_response_description' => $this->truncate($registration->providerMessage),
                 'status'                    => 'processing',
@@ -315,6 +316,20 @@ final class DonationService
             ]);
 
             $this->logger->security('Callback with unknown state', ['gateway' => $gatewayCode]);
+            return $this->outcome('invalid', null, null, null, 'We could not match this payment to a donation.');
+        }
+
+        if (strtolower((string) ($transaction['gateway_code'] ?? '')) !== $gatewayCode) {
+            $this->payments->recordCallback([
+                'payment_transaction_id' => (int) $transaction['id'],
+                'gateway_id'             => $gatewayId,
+                'callback_method'        => $method === 'POST' ? 'POST' : 'GET',
+                'safe_payload'           => $safePayload,
+                'validation_result'      => 'rejected',
+                'reason'                 => 'Callback gateway did not match the stored transaction.',
+            ]);
+
+            $this->logger->security('Callback gateway did not match stored transaction', ['gateway' => $gatewayCode]);
             return $this->outcome('invalid', null, null, null, 'We could not match this payment to a donation.');
         }
 
@@ -394,13 +409,51 @@ final class DonationService
                 ];
             }
 
-            $verification = $gateway->verify([
-                'providerOrderId'       => $transaction['provider_order_id'],
-                'providerTransactionId' => $transaction['provider_transaction_id'],
-                'merchantOrderId'       => $transaction['merchant_order_id'],
-                'expectedAmountMinor'   => (int) $transaction['amount_minor'],
-                'expectedCurrency'      => (string) $transaction['currency'],
-            ]);
+            try {
+                $verification = $gateway->verify([
+                    'providerOrderId'       => $transaction['provider_order_id'],
+                    'providerTransactionId' => $transaction['provider_transaction_id'],
+                    'merchantOrderId'       => $transaction['merchant_order_id'],
+                    'expectedAmountMinor'   => (int) $transaction['amount_minor'],
+                    'expectedCurrency'      => (string) $transaction['currency'],
+                ]);
+            } catch (PaymentGatewayException $e) {
+                // A timeout or transport error is indeterminate: the gateway
+                // may have processed the payment. Leave the donation in its
+                // current processing state for the reconciliation job rather
+                // than presenting a false decline.
+                $now = gmdate('Y-m-d H:i:s');
+                $reason = $e->reason() !== '' ? $e->reason() : 'verification_error';
+
+                $this->payments->updateTransaction((int) $transaction['id'], [
+                    'callback_received_at'          => $now,
+                    'last_reconciled_at'            => $now,
+                    'status'                        => 'processing',
+                    'provider_response_code'        => $e->providerCode() ?? $reason,
+                    'provider_response_description'=> 'Finalization could not be completed; awaiting reconciliation.',
+                ]);
+                $this->payments->recordCallback([
+                    'payment_transaction_id' => (int) $transaction['id'],
+                    'gateway_id'             => $gatewayId,
+                    'callback_method'        => $method === 'POST' ? 'POST' : 'GET',
+                    'safe_payload'           => $safePayload,
+                    'validation_result'      => 'error',
+                    'reason'                 => 'Gateway Finalization could not be completed (' . $reason . ').',
+                    'processed_at'           => $now,
+                ]);
+                $this->logger->payment('Gateway finalization could not be verified', [
+                    'gateway' => $gatewayCode,
+                    'reason'  => $reason,
+                ]);
+
+                $currentDonation = $this->donations->find((int) $donation['id']) ?? $fresh ?? $donation;
+                return [
+                    'duplicate' => false,
+                    'donation'  => $currentDonation,
+                    'status'    => (string) ($currentDonation['status'] ?? 'processing'),
+                    'verified'  => null,
+                ];
+            }
 
             $this->payments->updateTransaction((int) $transaction['id'], [
                 'callback_received_at' => gmdate('Y-m-d H:i:s'),
@@ -468,13 +521,26 @@ final class DonationService
         }
 
         $received = $payload['TransactionID'] ?? $payload['transactionId'] ?? $payload['transaction_id'] ?? null;
-        if ($received === null || $received === '') {
+        if (!is_string($received) && !is_int($received) && !is_float($received)) {
+            return ['received' => null, 'reason' => 'Callback did not contain a valid TransactionID.'];
+        }
+        $received = (string) $received;
+        if ($received === '') {
             return ['received' => null, 'reason' => 'Callback did not contain a TransactionID.'];
+        }
+        if (!preg_match('//u', $received)) {
+            return ['received' => null, 'reason' => 'Callback TransactionID was not valid text.'];
+        }
+        if (mb_strlen($received, 'UTF-8') > 128) {
+            return [
+                'received' => mb_substr($received, 0, 128, 'UTF-8'),
+                'reason'   => 'Callback TransactionID was too long.',
+            ];
         }
 
         $stored = (string) ($transaction['provider_transaction_id'] ?? '');
-        if ($stored === '' || (string) $received !== $stored) {
-            return ['received' => (string) $received, 'reason' => 'TransactionID does not match the registered payment.'];
+        if ($stored === '' || !hash_equals($stored, $received)) {
+            return ['received' => $received, 'reason' => 'TransactionID does not match the registered payment.'];
         }
 
         return null;
@@ -509,13 +575,37 @@ final class DonationService
         $lockKey = 'payment:transaction:' . $transactionId;
 
         $result = $this->lock->withLock($lockKey, function () use ($gateway, $transaction, $donation) {
-            $verification = $gateway->verify([
-                'providerOrderId'       => $transaction['provider_order_id'],
-                'providerTransactionId' => $transaction['provider_transaction_id'],
-                'merchantOrderId'       => $transaction['merchant_order_id'],
-                'expectedAmountMinor'   => (int) $transaction['amount_minor'],
-                'expectedCurrency'      => (string) $transaction['currency'],
-            ]);
+            try {
+                $verification = $gateway->verify([
+                    'providerOrderId'       => $transaction['provider_order_id'],
+                    'providerTransactionId' => $transaction['provider_transaction_id'],
+                    'merchantOrderId'       => $transaction['merchant_order_id'],
+                    'expectedAmountMinor'   => (int) $transaction['amount_minor'],
+                    'expectedCurrency'      => (string) $transaction['currency'],
+                ]);
+            } catch (PaymentGatewayException $e) {
+                // One gateway outage must not abort the whole reconciliation
+                // worker. The result is indeterminate, so keep the donation
+                // unchanged and try Finalization again on the next pass.
+                $now = gmdate('Y-m-d H:i:s');
+                $reason = $e->reason() !== '' ? $e->reason() : 'verification_error';
+                $this->payments->updateTransaction((int) $transaction['id'], [
+                    'status'                        => 'processing',
+                    'provider_response_code'        => $e->providerCode() ?? $reason,
+                    'provider_response_description'=> 'Finalization could not be completed; awaiting reconciliation.',
+                    'last_reconciled_at'            => $now,
+                ]);
+                $this->logger->payment('Payment reconciliation could not be verified', [
+                    'gateway' => (string) ($transaction['gateway_code'] ?? ''),
+                    'reason'  => $reason,
+                ]);
+
+                return [
+                    'changed' => false,
+                    'status'  => (string) $donation['status'],
+                    'reason'  => 'verification_error',
+                ];
+            }
 
             return $this->statusService->applyVerifiedResult($transaction, $donation, $verification);
         });

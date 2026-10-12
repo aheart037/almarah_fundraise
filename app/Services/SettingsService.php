@@ -170,8 +170,12 @@ final class SettingsService
             'timeout'     => $this->int("gateway.{$code}.timeout", (int) ($defaults['timeout'] ?? 30)),
         ];
 
+        if ($code === 'etisalat') {
+            $overrides['port'] = $this->int('gateway.etisalat.port', (int) ($defaults['port'] ?? 2443));
+        }
+
         $secretKeys = ['username', 'password'];
-        foreach (['username', 'password', 'merchant_id', 'customer', 'store', 'terminal', 'currency_code', 'currency_name', 'currency'] as $field) {
+        foreach (['username', 'password', 'merchant_id', 'customer', 'store', 'terminal', 'currency_code', 'currency_name', 'currency', 'transaction_hint'] as $field) {
             if (!array_key_exists($field, $defaults)) {
                 continue;
             }

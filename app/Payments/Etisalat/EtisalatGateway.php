@@ -71,7 +71,20 @@ final class EtisalatGateway implements PaymentGatewayInterface
 
     public function returnUrl(string $callbackState): string
     {
-        return rtrim($this->baseUrl, '/') . '/payments/etisalat/return?state=' . rawurlencode($callbackState);
+        // The EPG ReturnPath is a browser POST that contains the provider's
+        // TransactionID. Keep this URL compact (the integration guide limits
+        // ReturnPath to 256 characters); PaymentController resolves the posted
+        // ID to the stored transaction and re-derives our signed state.
+        $url = rtrim($this->baseUrl, '/') . '/payments/etisalat/return';
+        if (strlen($url) > 256) {
+            throw new PaymentGatewayException(
+                'The Etisalat return URL exceeds the gateway 256-character limit. Shorten the configured site URL.',
+                'etisalat',
+                'return_url_too_long'
+            );
+        }
+
+        return $url;
     }
 
     public function register(PaymentRequest $request): PaymentRegistrationResult
@@ -101,7 +114,7 @@ final class EtisalatGateway implements PaymentGatewayInterface
             'OrderID'         => $request->merchantOrderId,
             'OrderName'       => 'Donation',
             'OrderInfo'       => Str::limit($request->description, 100, ''),
-            'TransactionHint' => 'CPT:Y;VCC:Y;',
+            'TransactionHint' => (string) ($this->config['transaction_hint'] ?? 'CPT:Y;VCC:Y;'),
             'ReturnPath'      => $request->returnUrl,
             'UserName'        => (string) ($this->config['username'] ?? ''),
             'Password'        => (string) ($this->config['password'] ?? ''),
@@ -144,16 +157,31 @@ final class EtisalatGateway implements PaymentGatewayInterface
                 $code
             );
         }
+        if (mb_strlen($transactionId, 'UTF-8') > 128) {
+            throw new PaymentGatewayException(
+                'Etisalat returned a TransactionID that exceeds the supported length.',
+                'etisalat',
+                'invalid_transaction_id'
+            );
+        }
 
         $paymentPage = (string) ($body['PaymentPage'] ?? $body['PaymentPortal'] ?? '');
         $this->validatePaymentPageUrl($paymentPage);
 
         $uniqueId = isset($body['UniqueID']) ? (string) $body['UniqueID'] : null;
+        $bridgeState = $request->metadata['callback_state'] ?? null;
+        if (!is_string($bridgeState) || !preg_match('/^[A-Za-z0-9_-]{16,128}$/D', $bridgeState)) {
+            throw new PaymentGatewayException(
+                'Etisalat payment bridge state is missing or invalid.',
+                'etisalat',
+                'missing_bridge_state'
+            );
+        }
 
-        // The donor never sees the EPG URL directly: they are sent to our own
-        // bridge, which auto-submits the stored TransactionID. This keeps the
-        // value under our control and satisfies the hosted-POST requirement.
-        $bridgeUrl = rtrim($this->baseUrl, '/') . '/payments/etisalat/bridge/' . rawurlencode($transactionId);
+        // The donor gets a compact signed state URL, not the bank TransactionID.
+        // The bridge resolves that state to our stored row and inserts the
+        // provider-issued TransactionID into the hosted POST server-side.
+        $bridgeUrl = rtrim($this->baseUrl, '/') . '/payments/etisalat/bridge/' . rawurlencode($bridgeState);
 
         $this->logger->payment('Etisalat registration succeeded', [
             'order'       => $request->merchantOrderId,
@@ -227,16 +255,32 @@ final class EtisalatGateway implements PaymentGatewayInterface
      */
     public function validatePaymentPageUrl(string $url): string
     {
-        if (!Str::isHttpsUrl($url)) {
-            $this->logger->security('Etisalat returned a non-HTTPS payment page URL', ['gateway' => 'etisalat']);
+        if (strlen($url) > 2048) {
+            $this->logger->security('Etisalat payment page URL exceeds the supported length', ['gateway' => 'etisalat']);
             throw new PaymentGatewayException(
-                'Etisalat returned an invalid (non-HTTPS) payment page URL.',
+                'Etisalat returned a payment page URL that is too long to store safely.',
                 'etisalat',
                 'invalid_payment_url'
             );
         }
 
-        $host = Str::host($url) ?? '';
+        $parts = parse_url($url);
+        if (!Str::isHttpsUrl($url)
+            || !is_array($parts)
+            || strtolower((string) ($parts['scheme'] ?? '')) !== 'https'
+            || empty($parts['host'])
+            || isset($parts['user'])
+            || isset($parts['pass'])
+            || isset($parts['fragment'])) {
+            $this->logger->security('Etisalat returned an invalid payment page URL', ['gateway' => 'etisalat']);
+            throw new PaymentGatewayException(
+                'Etisalat returned an invalid (non-HTTPS or credential-bearing) payment page URL.',
+                'etisalat',
+                'invalid_payment_url'
+            );
+        }
+
+        $host = strtolower((string) $parts['host']);
         $allowed = (array) ($this->config['allowed_hosts'] ?? []);
         $isAllowed = false;
 
@@ -303,8 +347,13 @@ final class EtisalatGateway implements PaymentGatewayInterface
     public function verify(array $context): PaymentVerificationResult
     {
         $transactionId = (string) ($context['providerTransactionId'] ?? '');
-        $expectedAmountMinor = $context['expectedAmountMinor'] ?? null;
-        $expectedCurrency = $context['expectedCurrency'] ?? null;
+        $expectedOrderId = (string) ($context['merchantOrderId'] ?? $context['providerOrderId'] ?? '');
+        $expectedAmountMinor = isset($context['expectedAmountMinor'])
+            ? (int) $context['expectedAmountMinor']
+            : null;
+        $expectedCurrency = isset($context['expectedCurrency'])
+            ? strtoupper((string) $context['expectedCurrency'])
+            : null;
 
         if ($transactionId === '') {
             throw new PaymentGatewayException(
@@ -323,35 +372,39 @@ final class EtisalatGateway implements PaymentGatewayInterface
             ],
         ]);
 
-        $extracted = $this->api->extract('Finalization', $response);
+        $extracted = $this->api->extract(EtisalatApiClient::OP_FINALIZATION, $response);
         $code = $extracted['code'];
         $message = $extracted['message'];
         $body = $extracted['block'];
-
         $status = $this->statusMapper->mapEtisalat($code);
 
-        $providerAmountMinor = null;
+        $providerOrderId = isset($body['OrderID']) && is_scalar($body['OrderID'])
+            ? (string) $body['OrderID']
+            : null;
+        $returnedTxn = isset($body['TransactionID']) && is_scalar($body['TransactionID'])
+            ? (string) $body['TransactionID']
+            : null;
+        $providerCurrency = isset($body['Currency']) && is_scalar($body['Currency'])
+            ? strtoupper((string) $body['Currency'])
+            : null;
+
         $providerAmount = $body['Amount'] ?? null;
         if (is_array($providerAmount)) {
             $providerAmount = $providerAmount['Value'] ?? $providerAmount['value'] ?? null;
         }
-        if ($providerAmount !== null && is_numeric($providerAmount)) {
-            try {
-                $providerAmountMinor = Money::fromProviderString((string) $providerAmount);
-            } catch (\Throwable $e) {
-                $providerAmountMinor = null;
-            }
-        }
+        $providerAmountDecimal = is_scalar($providerAmount)
+            ? self::canonicalDecimal((string) $providerAmount)
+            : null;
 
-        $providerCurrency = isset($body['Currency']) ? strtoupper((string) $body['Currency']) : null;
-        $providerOrderId = isset($body['OrderID']) ? (string) $body['OrderID'] : null;
-        $returnedTxn = isset($body['TransactionID']) ? (string) $body['TransactionID'] : null;
+        $safe = $this->safeSubset($body, [
+            'ResponseCode', 'ResponseDescription', 'TransactionID', 'OrderID',
+            'Amount', 'Currency', 'Description',
+        ]);
 
-        $safe = $this->safeSubset($body, ['ResponseCode', 'ResponseDescription', 'TransactionID', 'OrderID', 'Amount', 'Currency', 'Description']);
-
-        // A finalization that reports a different transaction must never be
-        // applied to our record.
-        if ($returnedTxn !== null && $returnedTxn !== '' && $returnedTxn !== $transactionId) {
+        // Finalization must refer to the same registered TransactionID. The
+        // posted callback ID was already matched against our saved ID before
+        // this request; if EPG echoes an ID, it must also match.
+        if ($returnedTxn !== null && $returnedTxn !== '' && !hash_equals($transactionId, $returnedTxn)) {
             $this->logger->security('Etisalat finalization transaction id mismatch', [
                 'expected' => $transactionId,
                 'received' => $returnedTxn,
@@ -362,46 +415,101 @@ final class EtisalatGateway implements PaymentGatewayInterface
                 status: 'processing',
                 verified: false,
                 providerCode: $code,
-                providerMessage: 'Provider returned a different TransactionID than requested.',
+                providerMessage: 'Etisalat returned a different TransactionID than the registered payment.',
                 providerTransactionId: $transactionId,
                 safeResponse: $safe
             );
         }
 
-        if ($expectedAmountMinor !== null && $providerAmountMinor !== null && (int) $expectedAmountMinor !== $providerAmountMinor) {
-            $this->logger->security('Etisalat amount mismatch on finalization', [
-                'transaction' => $transactionId,
-                'expected'    => (int) $expectedAmountMinor,
-                'received'    => $providerAmountMinor,
-            ]);
-
+        if ($code === null) {
             return new PaymentVerificationResult(
                 gateway: 'etisalat',
                 status: 'processing',
                 verified: false,
-                providerCode: $code,
-                providerMessage: 'Amount reported by the provider does not match the donation.',
+                providerMessage: $message ?? 'Etisalat Finalization did not return a numeric ResponseCode.',
                 providerTransactionId: $transactionId,
                 safeResponse: $safe
             );
         }
 
-        if ($expectedCurrency !== null && $providerCurrency !== null && strtoupper((string) $expectedCurrency) !== $providerCurrency) {
-            $this->logger->security('Etisalat currency mismatch on finalization', [
-                'transaction' => $transactionId,
-                'expected'    => (string) $expectedCurrency,
-                'received'    => $providerCurrency,
-            ]);
+        // A successful response is not enough on its own. Require the OrderID
+        // and amount echoed by Finalization to match what this site registered.
+        // The bank's integration add-on verifies these fields before completion.
+        if ($status === 'completed') {
+            if ($expectedOrderId === '' || $providerOrderId === null || !hash_equals($expectedOrderId, $providerOrderId)) {
+                $this->logger->security('Etisalat order id mismatch on finalization', [
+                    'transaction' => $transactionId,
+                ]);
 
-            return new PaymentVerificationResult(
-                gateway: 'etisalat',
-                status: 'processing',
-                verified: false,
-                providerCode: $code,
-                providerMessage: 'Currency reported by the provider does not match the donation.',
-                providerTransactionId: $transactionId,
-                safeResponse: $safe
-            );
+                return new PaymentVerificationResult(
+                    gateway: 'etisalat',
+                    status: 'processing',
+                    verified: false,
+                    providerCode: $code,
+                    providerMessage: 'Etisalat Finalization OrderID did not match the registered donation.',
+                    providerTransactionId: $transactionId,
+                    providerOrderId: $providerOrderId,
+                    safeResponse: $safe
+                );
+            }
+
+            $expectedAmountDecimal = $expectedAmountMinor !== null && $expectedAmountMinor > 0
+                ? self::canonicalDecimal(Money::toProviderString($expectedAmountMinor))
+                : null;
+            if ($expectedAmountDecimal === null
+                || $providerAmountDecimal === null
+                || !hash_equals($expectedAmountDecimal, $providerAmountDecimal)) {
+                $this->logger->security('Etisalat amount mismatch on finalization', [
+                    'transaction' => $transactionId,
+                ]);
+
+                return new PaymentVerificationResult(
+                    gateway: 'etisalat',
+                    status: 'processing',
+                    verified: false,
+                    providerCode: $code,
+                    providerMessage: 'Etisalat Finalization amount did not match the registered donation.',
+                    providerTransactionId: $transactionId,
+                    providerOrderId: $providerOrderId,
+                    safeResponse: $safe
+                );
+            }
+
+            // Some EPG Finalization responses do not contain Currency. The
+            // TransactionID is bound to the currency submitted at Registration;
+            // when a currency is echoed, still reject any mismatch.
+            if ($expectedCurrency !== null
+                && $providerCurrency !== null
+                && $expectedCurrency !== $providerCurrency) {
+                $this->logger->security('Etisalat currency mismatch on finalization', [
+                    'transaction' => $transactionId,
+                ]);
+
+                return new PaymentVerificationResult(
+                    gateway: 'etisalat',
+                    status: 'processing',
+                    verified: false,
+                    providerCode: $code,
+                    providerMessage: 'Etisalat Finalization currency did not match the registered donation.',
+                    providerTransactionId: $transactionId,
+                    providerOrderId: $providerOrderId,
+                    safeResponse: $safe
+                );
+            }
+        }
+
+        $providerAmountMinor = null;
+        if ($providerAmountDecimal !== null && $expectedAmountMinor !== null
+            && $providerAmountDecimal === self::canonicalDecimal(Money::toProviderString($expectedAmountMinor))) {
+            // This also supports EPG's documented/observed three-decimal
+            // representation (e.g. 50.000) without floating-point conversion.
+            $providerAmountMinor = $expectedAmountMinor;
+        } elseif (is_scalar($providerAmount)) {
+            try {
+                $providerAmountMinor = Money::fromProviderString((string) $providerAmount);
+            } catch (\Throwable) {
+                $providerAmountMinor = null;
+            }
         }
 
         return new PaymentVerificationResult(
@@ -417,6 +525,26 @@ final class EtisalatGateway implements PaymentGatewayInterface
             providerOrderId: $providerOrderId,
             safeResponse: $safe
         );
+    }
+
+    /**
+     * Canonicalize a non-negative provider decimal without float conversion.
+     * Trailing fractional zeroes are ignored, so 50, 50.00 and 50.000 compare
+     * as the same amount.
+     */
+    private static function canonicalDecimal(string $value): ?string
+    {
+        $value = trim($value);
+        if ($value === '' || !preg_match('/^\d+(?:\.\d+)?$/', $value)) {
+            return null;
+        }
+
+        $parts = explode('.', $value, 2);
+        $whole = ltrim($parts[0], '0');
+        $fraction = isset($parts[1]) ? rtrim($parts[1], '0') : '';
+        $whole = $whole === '' ? '0' : $whole;
+
+        return $whole . ($fraction !== '' ? '.' . $fraction : '');
     }
 
     /**

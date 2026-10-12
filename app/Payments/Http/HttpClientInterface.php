@@ -8,7 +8,7 @@ interface HttpClientInterface
 {
     /**
      * @param array<string,string|int> $query
-     * @param array<string,mixed>      $options  timeout, connect_timeout, headers, method override
+     * @param array<string,mixed>      $options  timeout, connect_timeout, headers, TLS version, connection reuse
      */
     public function get(string $url, array $query = [], array $options = []): HttpResult;
 

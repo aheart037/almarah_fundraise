@@ -54,12 +54,21 @@ final class CurlHttpClient implements HttpClientInterface
         $timeout = (int) ($options['timeout'] ?? $this->defaultTimeout);
         $connectTimeout = (int) ($options['connect_timeout'] ?? $this->connectTimeout);
 
-        $headers = array_merge(
-            ['Accept: application/json'],
-            (array) ($options['headers'] ?? [])
-        );
+        $headers = array_values((array) ($options['headers'] ?? []));
+        $hasAccept = false;
+        $hasContentType = false;
+        foreach ($headers as $header) {
+            if (!is_string($header)) {
+                continue;
+            }
+            $hasAccept = $hasAccept || preg_match('/^\s*Accept\s*:/i', $header) === 1;
+            $hasContentType = $hasContentType || preg_match('/^\s*Content-Type\s*:/i', $header) === 1;
+        }
 
-        if (isset($options['content_type'])) {
+        if (!$hasAccept) {
+            $headers[] = 'Accept: application/json';
+        }
+        if (isset($options['content_type']) && !$hasContentType) {
             $headers[] = 'Content-Type: ' . $options['content_type'];
         }
 
@@ -68,6 +77,7 @@ final class CurlHttpClient implements HttpClientInterface
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_HEADER         => true,
             CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_FORBID_REUSE   => !empty($options['forbid_reuse']),
             CURLOPT_TIMEOUT        => max(1, $timeout),
             CURLOPT_CONNECTTIMEOUT => max(1, $connectTimeout),
             CURLOPT_SSL_VERIFYPEER => true,
@@ -77,6 +87,12 @@ final class CurlHttpClient implements HttpClientInterface
             CURLOPT_PROTOCOLS      => CURLPROTO_HTTPS,
             CURLOPT_REDIR_PROTOCOLS=> CURLPROTO_HTTPS,
         ]);
+
+        // The bank-provided EPG client pins the connection to TLS 1.2. Other
+        // gateways keep cURL's normal protocol negotiation unless requested.
+        if (isset($options['tls_version']) && is_int($options['tls_version'])) {
+            curl_setopt($ch, CURLOPT_SSLVERSION, $options['tls_version']);
+        }
 
         if ($method === 'POST') {
             curl_setopt($ch, CURLOPT_POST, true);
