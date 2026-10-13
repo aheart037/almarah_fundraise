@@ -106,49 +106,51 @@ final class FundraiserController extends Controller
 
     // ------------------------------------------------------------------ actions
 
-    public function approve(Request $request, string $id): Response
+    // Router handlers receive the Request only. Route parameters are available
+    // through Request::routeParam(), just as they are in the other controllers.
+    public function approve(Request $request): Response
     {
-        return $this->transition($request, (int) $id, 'approve');
+        return $this->transition($request, (int) $request->routeParam('id', 0), 'approve');
     }
 
-    public function reject(Request $request, string $id): Response
+    public function reject(Request $request): Response
     {
-        return $this->transition($request, (int) $id, 'reject');
+        return $this->transition($request, (int) $request->routeParam('id', 0), 'reject');
     }
 
-    public function requestChanges(Request $request, string $id): Response
+    public function requestChanges(Request $request): Response
     {
-        return $this->transition($request, (int) $id, 'request_changes');
+        return $this->transition($request, (int) $request->routeParam('id', 0), 'request_changes');
     }
 
-    public function pause(Request $request, string $id): Response
+    public function pause(Request $request): Response
     {
-        return $this->transition($request, (int) $id, 'pause');
+        return $this->transition($request, (int) $request->routeParam('id', 0), 'pause');
     }
 
-    public function publish(Request $request, string $id): Response
+    public function publish(Request $request): Response
     {
-        return $this->transition($request, (int) $id, 'publish');
+        return $this->transition($request, (int) $request->routeParam('id', 0), 'publish');
     }
 
-    public function unpublish(Request $request, string $id): Response
+    public function unpublish(Request $request): Response
     {
-        return $this->transition($request, (int) $id, 'unpublish');
+        return $this->transition($request, (int) $request->routeParam('id', 0), 'unpublish');
     }
 
-    public function archive(Request $request, string $id): Response
+    public function archive(Request $request): Response
     {
-        return $this->transition($request, (int) $id, 'archive');
+        return $this->transition($request, (int) $request->routeParam('id', 0), 'archive');
     }
 
-    public function destroy(Request $request, string $id): Response
+    public function destroy(Request $request): Response
     {
-        return $this->transition($request, (int) $id, 'delete');
+        return $this->transition($request, (int) $request->routeParam('id', 0), 'delete');
     }
 
-    public function feature(Request $request, string $id): Response
+    public function feature(Request $request): Response
     {
-        return $this->transition($request, (int) $id, 'feature');
+        return $this->transition($request, (int) $request->routeParam('id', 0), 'feature');
     }
 
     public function hideUpdate(Request $request): Response
@@ -161,7 +163,7 @@ final class FundraiserController extends Controller
             return $this->redirect('/admin/fundraisers/' . $fundraiser['id']);
         }
 
-        $this->service->hideUpdate((int) $updateId, (int) $this->auth->id());
+        $this->service->hideUpdate((int) $update['id'], (int) $this->auth->id());
 
         $this->flashSuccess('Update hidden from the public page.');
         return $this->redirect('/admin/fundraisers/' . $fundraiser['id']);

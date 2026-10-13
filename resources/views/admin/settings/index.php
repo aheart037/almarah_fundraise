@@ -66,6 +66,12 @@ $faviconUrl = site_brand_asset('site.favicon');
       </div>
     </div>
 
+    <?php if (!empty($status['missing'])): ?>
+      <p class="form-help">Missing configuration: <?= e(implode(', ', (array) $status['missing'])) ?>.</p>
+    <?php elseif (empty($status['enabled'])): ?>
+      <p class="form-help">Merchant details are saved, but payments are off. Check “Accept payments” and save to make this method available to donors.</p>
+    <?php endif; ?>
+
     <p class="panel-sub">
       <?= e((string) ($config['description'] ?? '')) ?>
       <?php if (!empty($config['documentation'])): ?>

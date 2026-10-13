@@ -11,8 +11,8 @@ declare(strict_types=1);
  *   1. the donation form (or any fetch() caller) POSTs the donor's details;
  *   2. the donation is validated and saved as "pending", then registered
  *      with the payment gateway (for UBL / Etisalat EPG that is the EPG
- *      Registration call — the gateway's ReturnPath is
- *      fundraise-response.php, see EtisalatGateway::returnUrl());
+ *      Registration call — the gateway's ReturnPath is the canonical
+ *      /payments/etisalat/return route, see EtisalatGateway::returnUrl());
  *   3. the caller is handed the gateway hand-off URL.
  *
  * Two response styles, exactly like the Qurbani page:
@@ -36,7 +36,7 @@ declare(strict_types=1);
  * ETISALAT_* environment values), shared with the /donate flow, whose POST
  * route remains available as an alias for this same step.
  *
- * The bank sends the donor back to fundraise-response.php (step 2).
+ * The bank returns through /payments/etisalat/return (step 2).
  */
 
 // This folder is the website (see index.php).
@@ -103,8 +103,8 @@ if (!$request->isPost()) {
 }
 
 // The site's own form carries a CSRF token; require it for browser posts.
-// (The gateway's return trip goes to fundraise-response.php and never
-// passes through here, so this cannot lock a donor out after paying.)
+// (The gateway's return trip uses its callback route and never passes
+// through here, so this cannot lock a donor out after paying.)
 /** @var Csrf $csrf */
 $csrf = $app->make(Csrf::class);
 if (!$csrf->check($request)) {
@@ -187,8 +187,8 @@ $user = $app->make(\App\Services\AuthService::class)->user();
 
 try {
     // Creates the pending donation and runs gateway Registration. For
-    // Etisalat the Registration ReturnPath is fundraise-response.php; the
-    // returned redirect_url is the bridge page that hands the donor over
+    // Etisalat Registration uses /payments/etisalat/return for its callback;
+    // the returned redirect_url is the bridge page that hands the donor over
     // to the bank's PaymentPage. For Meezan it is the hosted formUrl.
     $result = $donations->initiate([
         'amount_minor' => $amountMinor,

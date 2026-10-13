@@ -182,24 +182,28 @@ final class PaymentGatewayManager
     public function health(): array
     {
         $out = [];
+        $status = $this->settings->gatewayStatus();
 
         foreach ($this->availableCodes() as $code) {
             $config = $this->settings->gatewayConfig($code);
-
-            $out[$code] = [
-                'code'        => $code,
-                'label'       => (string) ($config['label'] ?? ucfirst($code)),
-                'enabled'     => (bool) ($config['enabled'] ?? false),
-                'environment' => (string) ($config['environment'] ?? 'sandbox'),
-                'configured'  => (string) ($config['username'] ?? '') !== ''
-                    && (string) ($config['password'] ?? '') !== ''
-                    && (string) ($config['sandbox_url'] ?? '') !== '',
-                'has_username'=> (string) ($config['username'] ?? '') !== '',
-                'has_password'=> (string) ($config['password'] ?? '') !== '',
-                'currency'    => (string) ($config['currency_name'] ?? $config['currency'] ?? 'PKR'),
-                'supports_refunds' => (bool) ($config['refund_enabled'] ?? $code === 'etisalat'),
-                'host'        => \App\Core\Str::host((string) ($config[($config['environment'] ?? 'sandbox') === 'live' ? 'live_url' : 'sandbox_url'] ?? '')),
+            $gatewayStatus = $status[$code] ?? [
+                'code'         => $code,
+                'enabled'      => false,
+                'configured'   => false,
+                'environment'  => 'sandbox',
+                'missing'      => [],
+                'has_username' => false,
+                'has_password' => false,
             ];
+            $environment = (string) ($gatewayStatus['environment'] ?? 'sandbox');
+            $endpoint = $environment === 'live' ? 'live_url' : 'sandbox_url';
+
+            $out[$code] = array_merge($gatewayStatus, [
+                'label'            => (string) ($config['label'] ?? ucfirst($code)),
+                'currency'         => (string) ($config['currency_name'] ?? $config['currency'] ?? 'PKR'),
+                'supports_refunds' => (bool) ($config['refund_enabled'] ?? $code === 'etisalat'),
+                'host'             => \App\Core\Str::host((string) ($config[$endpoint] ?? '')),
+            ]);
         }
 
         return $out;
