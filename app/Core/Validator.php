@@ -82,6 +82,27 @@ final class Validator
     private function applyRule(string $field, string $label, string $name, ?string $argument, mixed $value): void
     {
         switch ($name) {
+            case 'string':
+                if (!is_string($value)) {
+                    $this->addError($field, "{$label} must be text.");
+                }
+                break;
+
+            case 'integer':
+                // Alias of 'int': rule strings across the codebase use both.
+                if (filter_var($value, FILTER_VALIDATE_INT) === false) {
+                    $this->addError($field, "{$label} must be a whole number.");
+                }
+                break;
+
+            case 'file':
+                // Uploads arrive via $_FILES, not the merged input array, so
+                // this only fires when a caller validates a files payload.
+                if (!is_array($value) || !isset($value['tmp_name'])) {
+                    $this->addError($field, "{$label} must be an uploaded file.");
+                }
+                break;
+
             case 'email':
                 if (!filter_var((string) $value, FILTER_VALIDATE_EMAIL)) {
                     $this->addError($field, "{$label} must be a valid email address.");

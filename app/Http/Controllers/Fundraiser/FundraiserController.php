@@ -72,6 +72,11 @@ final class FundraiserController extends Controller
             return $this->flashFormState($validator->errors(), $request->all());
         }
 
+        $fieldError = $this->semanticError($request);
+        if ($fieldError !== null) {
+            return $this->flashFormState($fieldError, $request->all());
+        }
+
         $data = $this->dataFrom($request);
 
         // Optional cover image upload.
@@ -89,6 +94,16 @@ final class FundraiserController extends Controller
         } catch (InvalidArgumentException $e) {
             $this->session->flash('_old', $this->stripSensitive($request->all()));
             $this->flashError($e->getMessage());
+            return $this->redirect('/dashboard/fundraisers/create');
+        } catch (\Throwable $e) {
+            // A database failure (for example a foreign-key or column-length
+            // problem) used to escape as a bare HTTP 500 and the fundraiser
+            // simply "was not created". Log the real reason and tell the
+            // owner plainly, keeping their input for the retry.
+            error_log('[almarah] fundraiser create failed: ' . $e->getMessage()
+                . ' in ' . $e->getFile() . ':' . $e->getLine());
+            $this->session->flash('_old', $this->stripSensitive($request->all()));
+            $this->flashError('We could not save your fundraiser just now. Your text is kept below — please try again, and contact support if it keeps happening.');
             return $this->redirect('/dashboard/fundraisers/create');
         }
 
@@ -128,6 +143,11 @@ final class FundraiserController extends Controller
             return $this->flashFormState($validator->errors(), $request->all());
         }
 
+        $fieldError = $this->semanticError($request);
+        if ($fieldError !== null) {
+            return $this->flashFormState($fieldError, $request->all());
+        }
+
         $data = $this->dataFrom($request, true);
 
         $file = $request->file('cover_image');
@@ -146,6 +166,12 @@ final class FundraiserController extends Controller
         } catch (InvalidArgumentException $e) {
             $this->session->flash('_old', $this->stripSensitive($request->all()));
             $this->flashError($e->getMessage());
+            return $this->redirect('/dashboard/fundraisers/' . $fundraiserId . '/edit');
+        } catch (\Throwable $e) {
+            error_log('[almarah] fundraiser update failed: ' . $e->getMessage()
+                . ' in ' . $e->getFile() . ':' . $e->getLine());
+            $this->session->flash('_old', $this->stripSensitive($request->all()));
+            $this->flashError('We could not save your changes just now. Please try again, and contact support if it keeps happening.');
             return $this->redirect('/dashboard/fundraisers/' . $fundraiserId . '/edit');
         }
 
@@ -332,16 +358,75 @@ final class FundraiserController extends Controller
         $rules = [
             'title'                => 'required|string|min:5|max:150',
             'story'                => 'required|string|min:50|max:20000',
-            'impact_statement'     => 'nullable|string|max:500',
+            // The fundraisers.impact_statement column is VARCHAR(180): the
+            // form used to allow 500 characters, which MySQL strict mode
+            // rejected at insert time and the fundraiser was never created.
+            'impact_statement'     => 'nullable|string|max:180',
             'category_id'          => 'required|integer',
             'campaign_id'          => 'nullable|integer',
-            'goal'                 => 'required',
+            'goal'                 => 'required|numeric',
             'end_at'               => 'nullable|date',
             'cover_image'          => 'nullable|file',
             'submit_for_review'    => 'nullable|in:1,on,yes',
         ];
 
         return Validator::make($request->all(), $rules);
+    }
+
+    /**
+     * Checks the plain Validator cannot express: the goal range (with the
+     * same limits FundraiserService enforces, but as a field error the form
+     * can point at), that the chosen cause/campaign actually exist, and that
+     * an end date is not already past. Returning the first problem as a
+     * field error keeps every rejection visible next to its input instead
+     * of bouncing the owner back to a seemingly untouched form.
+     *
+     * @return array<string,string>|null
+     */
+    private function semanticError(Request $request): ?array
+    {
+        $goalRaw = str_replace(',', '', (string) $request->input('goal', ''));
+        if (!is_numeric($goalRaw) || (float) $goalRaw <= 0) {
+            return ['goal' => 'Enter your fundraising goal as a number of rupees, for example 50000.'];
+        }
+
+        $goalMinor = (int) round(((float) $goalRaw) * 100);
+        $floor = (int) Config::get('app.fundraisers.goal_min_minor', 1000000);
+        $ceiling = (int) Config::get('app.fundraisers.goal_max_minor', 2000000000);
+        if ($goalMinor < $floor) {
+            return ['goal' => 'Your goal must be at least ' . money($floor) . '. Increase the goal amount and try again.'];
+        }
+        if ($goalMinor > $ceiling) {
+            return ['goal' => 'Your goal may not exceed ' . money($ceiling) . '. Lower the goal amount and try again.'];
+        }
+
+        $categoryId = (int) $request->input('category_id', 0);
+        $categoryIds = array_map(
+            static fn (array $category): int => (int) $category['id'],
+            $this->fundraisers->categories()
+        );
+        if ($categoryId <= 0 || !in_array($categoryId, $categoryIds, true)) {
+            return ['category_id' => 'Choose a cause from the list. If the list is empty, please contact support — no causes have been set up yet.'];
+        }
+
+        $campaignId = (int) $request->input('campaign_id', 0);
+        if ($campaignId > 0) {
+            $campaignIds = array_map(
+                static fn (array $campaign): int => (int) $campaign['id'],
+                app(\App\Repositories\CampaignRepository::class)->active(50)
+            );
+            if (!in_array($campaignId, $campaignIds, true)) {
+                return ['campaign_id' => 'That campaign is no longer available. Choose another campaign or leave it unlinked.'];
+            }
+        }
+
+        $endAt = $request->input('end_at');
+        if (is_string($endAt) && $endAt !== '' && strtotime($endAt) !== false
+            && gmdate('Y-m-d', (int) strtotime($endAt)) < gmdate('Y-m-d')) {
+            return ['end_at' => 'The end date has already passed. Choose a future date or leave it blank.'];
+        }
+
+        return null;
     }
 
     /** @return array<string,mixed> */
