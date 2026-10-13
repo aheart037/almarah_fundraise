@@ -202,7 +202,7 @@ final class PaymentGatewayManager
                 'label'            => (string) ($config['label'] ?? ucfirst($code)),
                 'currency'         => (string) ($config['currency_name'] ?? $config['currency'] ?? 'PKR'),
                 'supports_refunds' => (bool) ($config['refund_enabled'] ?? $code === 'etisalat'),
-                'host'             => \App\Core\Str::host((string) ($config[$endpoint] ?? '')),
+                'host'             => \App\Core\Str::host((string) (($config['api_url'] ?? '') !== '' ? $config['api_url'] : ($config[$endpoint] ?? ''))),
             ]);
         }
 

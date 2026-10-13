@@ -796,6 +796,13 @@ final class DonationService
             return strtoupper(Str::randomHex(8));
         }
 
+        if ($gatewayCode === 'meezan') {
+            // The Meezan Pay plugin sends a purely numeric orderNumber, and
+            // the bank refuses to reuse one. Date-time + random digits is
+            // numeric, unique per attempt and fits comfortably in 64 bits.
+            return gmdate('ymdHis') . str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        }
+
         // Preserve the existing merchant-order format for other gateways.
         return strtoupper(str_replace('-', '', $reference)) . strtoupper(Str::randomHex(2));
     }

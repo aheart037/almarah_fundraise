@@ -330,7 +330,7 @@ Required values (from your Meezan merchant onboarding pack):
 Steps:
   1. Enter the credentials in .env or in Admin > Settings > Meezan.
   2. Ask Meezan to whitelist your return URL:
-       https://fundraise.almarah.org/payments/meezan/return
+       https://fundraise.almarah.org/meezanreturn.php
      The return trip is only a trigger — the platform then calls
      getOrderStatus.do server-to-server and believes only that answer.
   3. Click "Test credentials" in Admin > Settings > Meezan. It authenticates
@@ -906,7 +906,7 @@ payments:health shows configured=no
 Donors are sent to the provider but returns never complete
   Most often the provider has not allowlisted your return URL, or the return URL
   differs from the one registered. Check that
-  https://<your-domain>/payments/meezan/return and
+  https://<your-domain>/meezanreturn.php and
   https://<your-domain>/fundraise-response.php are the exact URLs on file with
   the bank, then confirm the scheduled reconciliation is running:
     php bin/console payments:reconcile

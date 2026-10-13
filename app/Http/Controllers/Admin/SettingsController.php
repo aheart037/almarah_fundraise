@@ -278,11 +278,21 @@ final class SettingsController extends Controller
             }
         }
 
+        if ($code === 'meezan') {
+            foreach (['api_url' => 'Api Url', 'return_url' => 'Return Url'] as $urlField => $urlLabel) {
+                $value = trim((string) $request->input($urlField, ''));
+                if ($value !== '' && !preg_match('#^https://[^\s/]+#i', $value)) {
+                    $this->flashError('The Meezan ' . $urlLabel . ' must start with https://');
+                    return $this->redirect('/admin/settings#gateway-' . $code);
+                }
+            }
+        }
+
         $fields = [];
 
         // Only known fields are accepted; anything else is ignored.
         foreach (['enabled', 'environment', 'username', 'merchant_id', 'customer', 'store', 'terminal',
-                  'currency_code', 'currency_name', 'currency', 'transaction_hint', 'port', 'timeout', 'sandbox_url', 'live_url'] as $field) {
+                  'currency_code', 'currency_name', 'currency', 'transaction_hint', 'port', 'timeout', 'sandbox_url', 'live_url', 'api_url', 'return_url'] as $field) {
             if (!array_key_exists($field, $existing) && $field !== 'enabled' && $field !== 'environment') {
                 continue;
             }

@@ -58,8 +58,9 @@ final class MeezanGateway implements PaymentGatewayInterface
     {
         return (string) ($this->config['username'] ?? '') !== ''
             && (string) ($this->config['password'] ?? '') !== ''
-            && (string) ($this->config['sandbox_url'] ?? '') !== ''
-            && (string) ($this->config['live_url'] ?? '') !== '';
+            && ((string) ($this->config['api_url'] ?? '') !== ''
+                || ((string) ($this->config['sandbox_url'] ?? '') !== ''
+                    && (string) ($this->config['live_url'] ?? '') !== ''));
     }
 
     public function supportsRefunds(): bool
@@ -71,12 +72,19 @@ final class MeezanGateway implements PaymentGatewayInterface
 
     public function returnUrl(string $callbackState, ?string $merchantOrderId = null): string
     {
-        // Donors come back through the standalone fundraise-response.php
-        // page (the same pattern as qurbani-response.php on the Qurbani
-        // site), which verifies the payment server-to-server before
-        // anything is counted. The older /payments/meezan/return route
-        // stays registered for transactions already in flight.
-        return rtrim($this->baseUrl, '/') . '/fundraise-response.php?state=' . rawurlencode($callbackState);
+        // Same as the Meezan Pay plugin: the "Return Url" setting, a plain URL
+        // with no query string (default: <site>/meezanreturn.php). The bank
+        // sends the donor back to it with its own orderId appended;
+        // meezanreturn.php finds the stored payment by that orderId and
+        // verifies it server-to-server (getOrderStatus.do) before anything is
+        // counted. The older /payments/meezan/return route stays registered
+        // for transactions already in flight.
+        $configured = trim((string) ($this->config['return_url'] ?? ''));
+        if ($configured !== '') {
+            return $configured;
+        }
+
+        return rtrim($this->baseUrl, '/') . '/meezanreturn.php';
     }
 
     /**
@@ -128,18 +136,23 @@ final class MeezanGateway implements PaymentGatewayInterface
             throw new PaymentGatewayException('Donation amount must be positive.', 'meezan', 'invalid_amount');
         }
 
+        // Exactly the fields the Meezan Pay plugin sends to register.do:
+        // amount in minor units (rupees x 100, no decimals), currency 586,
+        // a numeric orderNumber and the return URL. Nothing else.
+        if (!preg_match('/^[0-9]{1,18}$/D', $request->merchantOrderId)) {
+            throw new PaymentGatewayException(
+                'Meezan orderNumber must be numeric.',
+                'meezan',
+                'invalid_order_id'
+            );
+        }
+
         $fields = [
-            'amount'      => $request->amountDecimal(),
+            'amount'      => (string) $request->amountMinor,
             'currency'    => $currencyCode,
             'orderNumber' => $request->merchantOrderId,
             'returnUrl'   => $request->returnUrl,
-            'orderId'     => $request->merchantOrderId,
-            'description' => Str::limit($request->description, 100, ''),
         ];
-
-        if ((string) ($this->config['merchant_id'] ?? '') !== '') {
-            $fields['merchantId'] = (string) $this->config['merchant_id'];
-        }
 
         $response = $this->api->register($fields);
 
@@ -272,16 +285,32 @@ final class MeezanGateway implements PaymentGatewayInterface
         $status = $this->statusMapper->mapMeezan($orderStatus);
 
         // Amount / currency echoed by the provider must match what we stored.
+        // getOrderStatus.do reports Amount in minor units, the same unit the
+        // plugin sends to register.do ("1050" = 10.50). A value with a decimal
+        // point is read as rupees.
         $providerAmountMinor = null;
-        if (isset($response['Amount']) && is_numeric($response['Amount'])) {
-            try {
-                $providerAmountMinor = Money::fromProviderString((string) $response['Amount']);
-            } catch (\Throwable $e) {
-                $providerAmountMinor = null;
+        $rawAmount = $response['Amount'] ?? $response['amount'] ?? null;
+        if ($rawAmount !== null && is_numeric($rawAmount)) {
+            $rawAmount = trim((string) $rawAmount);
+            if (preg_match('/^[0-9]+$/D', $rawAmount) === 1) {
+                $providerAmountMinor = (int) $rawAmount;
+            } else {
+                try {
+                    $providerAmountMinor = Money::fromProviderString($rawAmount);
+                } catch (\Throwable $e) {
+                    $providerAmountMinor = null;
+                }
             }
         }
 
-        $providerCurrency = isset($response['Currency']) ? strtoupper((string) $response['Currency']) : null;
+        $providerCurrency = isset($response['Currency']) ? strtoupper((string) $response['Currency'])
+            : (isset($response['currency']) ? strtoupper((string) $response['currency']) : null);
+        // The bank echoes the numeric ISO code (586); treat it as the same
+        // currency as the configured name (PKR).
+        if ($providerCurrency !== null
+            && $providerCurrency === (string) ($this->config['currency_code'] ?? '586')) {
+            $providerCurrency = strtoupper((string) ($this->config['currency_name'] ?? 'PKR'));
+        }
 
         if ($expectedAmountMinor !== null && $providerAmountMinor !== null && (int) $expectedAmountMinor !== $providerAmountMinor) {
             $this->logger->security('Meezan amount mismatch on verification', [

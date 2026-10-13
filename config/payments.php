@@ -19,6 +19,12 @@ return [
             'description' => 'Meezan Bank hosted payment page (register.do / getOrderStatus.do).',
             'enabled'     => (bool) Env::get('MEEZAN_ENABLED', false),
             'environment' => Env::get('MEEZAN_ENVIRONMENT', 'sandbox'),
+            // Same settings as the Meezan Pay plugin: Api Url, Username,
+            // Password and Return Url (default: <site>/meezanreturn.php).
+            'api_url'     => Env::get('MEEZAN_API_URL', ''),
+            'return_url'  => Env::get('MEEZAN_RETURN_URL', ''),
+            // Older installs saved separate sandbox / live endpoints; they are
+            // still honoured when no Api Url has been entered.
             'sandbox_url' => Env::get('MEEZAN_SANDBOX_URL', ''),
             'live_url'    => Env::get('MEEZAN_LIVE_URL', ''),
             'username'    => Env::secret('MEEZAN_USERNAME'),

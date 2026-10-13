@@ -29,9 +29,14 @@ final class MeezanApiClient
     private function baseUrl(): string
     {
         $env = $this->config['environment'] ?? 'sandbox';
-        $url = $env === 'live'
-            ? (string) ($this->config['live_url'] ?? '')
-            : (string) ($this->config['sandbox_url'] ?? '');
+        // The single Api Url from settings (as in the Meezan Pay plugin);
+        // older per-environment endpoints are the fallback.
+        $url = trim((string) ($this->config['api_url'] ?? ''));
+        if ($url === '') {
+            $url = $env === 'live'
+                ? (string) ($this->config['live_url'] ?? '')
+                : (string) ($this->config['sandbox_url'] ?? '');
+        }
 
         $url = rtrim($url, '/');
         if ($url === '') {
@@ -165,7 +170,9 @@ final class MeezanApiClient
     public function describe(): string
     {
         $env = (string) ($this->config['environment'] ?? 'sandbox');
-        $host = \App\Core\Str::host($this->config[$env === 'live' ? 'live_url' : 'sandbox_url'] ?? '');
+        $host = \App\Core\Str::host((string) (($this->config['api_url'] ?? '') !== ''
+            ? $this->config['api_url']
+            : ($this->config[$env === 'live' ? 'live_url' : 'sandbox_url'] ?? '')));
         return sprintf('Meezan (%s, %s)', $env, $host ?? 'unset');
     }
 }

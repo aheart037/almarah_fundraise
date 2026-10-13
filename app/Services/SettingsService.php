@@ -183,12 +183,24 @@ final class SettingsService
             $overrides[$field] = ($stored === null || $stored === '') ? $defaults[$field] : $stored;
         }
 
-        foreach (['sandbox_url', 'live_url'] as $field) {
+        foreach (['sandbox_url', 'live_url', 'api_url', 'return_url'] as $field) {
+            if (in_array($field, ['api_url', 'return_url'], true) && !array_key_exists($field, $defaults)) {
+                continue;
+            }
             $stored = $this->get("gateway.{$code}.{$field}");
             $overrides[$field] = ($stored === null || $stored === '') ? ($defaults[$field] ?? '') : $stored;
         }
 
         $config = array_merge($defaults, $overrides);
+
+        // Meezan uses ONE Api Url (as in the Meezan Pay plugin). Installs that
+        // saved separate sandbox / live endpoints keep working: with no Api
+        // Url entered, the endpoint of the chosen environment is used.
+        if ($code === 'meezan' && trim((string) ($config['api_url'] ?? '')) === '') {
+            $config['api_url'] = (string) (($config['environment'] ?? 'sandbox') === 'live'
+                ? ($config['live_url'] ?? '')
+                : ($config['sandbox_url'] ?? ''));
+        }
 
         // Secrets never fall back to a config file default that is empty.
         foreach ($secretKeys as $field) {
@@ -279,10 +291,9 @@ final class SettingsService
     {
         $requiredByGateway = [
             'meezan' => [
-                'username'    => 'Merchant username',
-                'password'    => 'Merchant password',
-                'sandbox_url' => 'Sandbox endpoint',
-                'live_url'    => 'Live endpoint',
+                'username' => 'Username',
+                'password' => 'Password',
+                'api_url'  => 'Api Url',
             ],
             'etisalat' => [
                 'customer'    => 'Customer ID',

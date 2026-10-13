@@ -102,13 +102,13 @@ $faviconUrl = site_brand_asset('site.favicon');
 
       <div class="form-row">
         <div class="field">
-          <label for="<?= e($code) ?>_username">Merchant username / ID</label>
+          <label for="<?= e($code) ?>_username"><?= $code === 'meezan' ? 'Username' : 'Merchant username / ID' ?></label>
           <input class="input" type="text" id="<?= e($code) ?>_username" name="username" autocomplete="off"
                  value="<?= e((string) ($config['username'] ?? '')) ?>">
         </div>
 
         <div class="field">
-          <label for="<?= e($code) ?>_password">Merchant password</label>
+          <label for="<?= e($code) ?>_password"><?= $code === 'meezan' ? 'Password' : 'Merchant password' ?></label>
           <input class="input" type="password" id="<?= e($code) ?>_password" name="password" autocomplete="new-password"
                  placeholder="<?= !empty($config['password_configured']) ? '•••••••• (stored — leave blank to keep)' : 'Not set' ?>">
           <span class="form-help">
@@ -123,6 +123,7 @@ $faviconUrl = site_brand_asset('site.favicon');
 
       <?php foreach (['customer', 'store', 'terminal', 'transaction_hint', 'merchant_id', 'currency_code', 'currency_name', 'currency'] as $field): ?>
         <?php if (!array_key_exists($field, $config)) { continue; } ?>
+        <?php if ($code === 'meezan' && $field === 'merchant_id') { continue; } // not used by the Meezan Pay plugin ?>
         <div class="form-row">
           <div class="field">
             <label for="<?= e($code . '_' . $field) ?>"><?= e(ucwords(str_replace('_', ' ', $field))) ?></label>
@@ -136,6 +137,22 @@ $faviconUrl = site_brand_asset('site.favicon');
         </div>
       <?php endforeach; ?>
 
+      <?php if ($code === 'meezan'): ?>
+        <div class="form-row">
+          <div class="field">
+            <label for="meezan_api_url">Api Url</label>
+            <input class="input mono" type="url" id="meezan_api_url" name="api_url" pattern="https://.*" title="Only https accepted"
+                   value="<?= e((string) ($config['api_url'] ?? '')) ?>" placeholder="https://&hellip;/payment/rest">
+            <span class="form-help">Provided by Meezan. The address that <code>register.do</code> and <code>getOrderStatus.do</code> are called on (without the trailing slash).</span>
+          </div>
+          <div class="field">
+            <label for="meezan_return_url">Return Url</label>
+            <input class="input mono" type="url" id="meezan_return_url" name="return_url" pattern="https://.*" title="Only https accepted"
+                   value="<?= e((string) ($config['return_url'] ?? '')) ?>" placeholder="<?= e(base_url('meezanreturn.php')) ?>">
+            <span class="form-help">Where Meezan sends the donor back after paying. Leave blank to use <code><?= e(base_url('meezanreturn.php')) ?></code> (the <code>meezanreturn.php</code> file in this site).</span>
+          </div>
+        </div>
+      <?php else: ?>
       <div class="form-row">
         <div class="field">
           <label for="<?= e($code) ?>_sandbox_url"><?= $code === 'etisalat' ? 'Sandbox gateway host' : 'Sandbox endpoint' ?></label>
@@ -150,6 +167,8 @@ $faviconUrl = site_brand_asset('site.favicon');
           <span class="form-help">Payment-page hosts returned by the gateway are checked against its allowlist.</span>
         </div>
       </div>
+
+      <?php endif; ?>
 
       <?php if ($code === 'etisalat'): ?>
         <div class="form-row">
