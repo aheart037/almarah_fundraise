@@ -159,8 +159,8 @@ final class DonationService
                 amountMinor: $amountMinor,
                 currency: $currency,
                 description: $this->describeDonation($target),
-                returnUrl: $gateway->returnUrl($callbackState),
-                callbackUrl: $gateway->returnUrl($callbackState),
+                returnUrl: $gateway->returnUrl($callbackState, $merchantOrderId),
+                callbackUrl: $gateway->returnUrl($callbackState, $merchantOrderId),
                 idempotencyKey: 'reg:' . $gatewayCode . ':' . $donationId,
                 customerName: (string) $input['name'],
                 customerEmail: (string) $input['email'],
@@ -269,6 +269,11 @@ final class DonationService
                 'reference'    => $reference,
                 'redirect_url' => (string) $registration->redirectUrl,
                 'gateway'      => $gatewayCode,
+                // Qurbani-style direct hand-off: the bank's own payment page
+                // and the TransactionID the donor's browser must POST to it.
+                'merchant_order_id' => $merchantOrderId,
+                'payment_page'      => (string) ($registration->providerPaymentPageUrl ?? ''),
+                'transaction_id'    => (string) ($registration->providerTransactionId ?? ''),
             ];
         });
     }

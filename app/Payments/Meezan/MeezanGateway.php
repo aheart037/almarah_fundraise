@@ -69,7 +69,7 @@ final class MeezanGateway implements PaymentGatewayInterface
         return (bool) ($this->config['refund_enabled'] ?? false);
     }
 
-    public function returnUrl(string $callbackState): string
+    public function returnUrl(string $callbackState, ?string $merchantOrderId = null): string
     {
         // Donors come back through the standalone fundraise-response.php
         // page (the same pattern as qurbani-response.php on the Qurbani

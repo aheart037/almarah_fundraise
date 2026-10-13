@@ -863,7 +863,7 @@ and no 'public_path' setting is needed: 'public_path' stays empty in config.php.
       Admin > Settings) only once you have credentials.
     * Give the bank these return URLs, with YOUR domain and folder:
         https://yourdomain.com/donate/payments/meezan/return
-        https://yourdomain.com/donate/payments/etisalat/return
+        https://yourdomain.com/donate/fundraise-response.php   (Etisalat; ?OrderID= is appended per payment)
     * Add the credentials in Admin > Settings (recommended), or in .env if you
       prefer to keep secrets out of the file you upload — they are encrypted
       with APP_KEY and never shown again.

@@ -27,7 +27,8 @@ declare(strict_types=1);
  *     browser, unlike the original Qurbani hand-off.
  *
  *   - A classic form POST (what the site's own donate form sends) is
- *     answered with a 302 redirect straight to the same hand-off URL.
+ *     answered with a page that auto-POSTs the TransactionID to the bank
+ *     (or a 302 redirect to the hosted page for Meezan).
  *
  * Everything after validation is the platform's own built-in machinery:
  * DonationService creates the donor/donation/transaction rows and the
@@ -209,16 +210,76 @@ try {
     $failBack('We could not start the payment just now. Please try again, or contact our team to give another way.', $target, $kind);
 }
 
+// --- hand the donor to the bank --------------------------------------------
+// Exactly like qurbani-submit.php + the Qurbani page script: for Etisalat EPG
+// the donor's browser POSTs the TransactionID straight to the bank's
+// PaymentPage. No internal bridge page, token lookup or expiry check sits in
+// between, so the hand-off cannot fail with "Payment session not found".
+$directBank = $result['gateway'] === 'etisalat'
+    && $result['payment_page'] !== ''
+    && $result['transaction_id'] !== '';
+
+if ($directBank) {
+    try {
+        $bankUrl = $gateways->gateway('etisalat')->validatePaymentPageUrl($result['payment_page']);
+    } catch (Throwable $e) {
+        error_log('[almarah] fundraise-submit refused bank page: ' . $e->getMessage());
+        $failBack('We could not start the payment just now. Please try again, or contact our team to give another way.', $target, $kind);
+    }
+}
+
 if ($isAjax) {
     $jsonOut(true, [
-        'message'      => 'Registered with the payment gateway.',
-        'reference'    => $result['reference'],
-        'gateway'      => $result['gateway'],
-        // Qurbani contract key + the platform's own name for the same URL.
-        'payment_page' => $result['redirect_url'],
-        'redirect_url' => $result['redirect_url'],
+        'message'        => 'Registered with the payment gateway.',
+        'reference'      => $result['reference'],
+        'order_id'       => $result['merchant_order_id'],
+        'gateway'        => $result['gateway'],
+        // Qurbani contract: POST transaction_id to payment_page.
+        'payment_page'   => $directBank ? $bankUrl : $result['redirect_url'],
+        'transaction_id' => $directBank ? $result['transaction_id'] : '',
+        'method'         => $directBank ? 'POST' : 'GET',
+        'redirect_url'   => $result['redirect_url'],
     ]);
 }
 
-header('Location: ' . $result['redirect_url'], true, 302);
+if (!$directBank) {
+    header('Location: ' . $result['redirect_url'], true, 302);
+    exit;
+}
+
+// Classic form post: answer with a small page that auto-POSTs the
+// TransactionID to the bank (the same thing the Qurbani script does).
+$h = static fn (string $v): string => htmlspecialchars($v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+http_response_code(200);
+header('Content-Type: text/html; charset=utf-8');
+header('Cache-Control: no-store');
+header('X-Content-Type-Options: nosniff');
+header('Referrer-Policy: no-referrer');
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Continuing to secure payment – Almarah Foundation</title>
+<link rel="stylesheet" href="<?= $h(asset('assets/css/style.css')) ?>">
+</head>
+<body>
+<div class="bridge-shell">
+  <div class="bridge-card">
+    <div class="spinner" aria-hidden="true"></div>
+    <h1>Taking you to the secure payment page</h1>
+    <p>You are being handed over to the UBL / Etisalat payment gateway. If nothing happens within a few seconds, press the button below.</p>
+    <form method="post" action="<?= $h($bankUrl) ?>" id="bankForm">
+      <input type="hidden" name="TransactionID" value="<?= $h($result['transaction_id']) ?>">
+      <button class="btn btn-brand btn-lg btn-block" type="submit">Continue to payment</button>
+    </form>
+    <p style="margin-top:18px;font-size:13px">Do not close this window. Your card details are entered only on the bank&rsquo;s own page.</p>
+  </div>
+</div>
+<script>document.getElementById('bankForm').submit();</script>
+</body>
+</html>
+<?php
 exit;

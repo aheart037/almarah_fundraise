@@ -37,6 +37,16 @@ return [
         'phone'      => '+92 42 111 262 272',
         'address'    => 'Canal Road, Lahore, Punjab, Pakistan',
         'hours'      => 'Monday to Saturday, 9:00am – 6:00pm (PKT)',
+        // Bank-transfer details shown on a failed-payment page, same as the
+        // Qurbani site, so a donor whose card failed can still give.
+        'bank'       => [
+            'name'    => 'Meezan Bank',
+            'title'   => 'Almarah Foundation',
+            'account' => '0341-0105394858',
+            'iban'    => 'PK36MEZN0003410105394858',
+            'branch'  => '0341 — Lahore',
+            'swift'   => 'MEZNPKKA',
+        ],
     ],
 
     'maintenance' => [

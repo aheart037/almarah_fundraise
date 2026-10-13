@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Public;
 
+use App\Core\Config;
 use App\Core\Csrf;
 use App\Core\Logger;
+use App\Core\Money;
 use App\Core\Request;
 use App\Core\Response;
 use App\Core\Session;
@@ -48,6 +50,102 @@ final class PaymentController extends Controller
     public function etisalatReturn(Request $request): Response
     {
         return $this->handleReturn($request, 'etisalat');
+    }
+
+    /**
+     * Qurbani-style result page (step 2 of fundraise-response.php).
+     *
+     * The bank sends the donor's browser back to fundraise-response.php with
+     * ?OrderID=... and a POSTed TransactionID. Settle the payment exactly like
+     * the routed callbacks do (server-to-server Finalization, idempotent, under
+     * a lock) and then render the result card in the site's own layout instead
+     * of redirecting, so a refresh simply re-reads the stored outcome.
+     */
+    public function fundraiseResult(Request $request): Response
+    {
+        $payload = $request->isPost() ? array_merge($request->all(), $request->json()) : $request->all();
+        $scalar = static fn (mixed $v): string => is_scalar($v) ? trim((string) $v) : '';
+
+        // Which gateway is calling back? Trust our own stored row over any
+        // claim in the request; default to Etisalat (the common case).
+        $gateway = 'etisalat';
+        $stateToken = $scalar($payload['state'] ?? $payload['token'] ?? '');
+        if ($scalar($payload['TransactionID'] ?? $payload['transactionId'] ?? '') !== '') {
+            $gateway = 'etisalat';
+        } elseif ($stateToken !== '') {
+            $stored = $this->payments->findByCallbackState(hash('sha256', $stateToken));
+            if ($stored !== null && (string) ($stored['gateway_code'] ?? '') !== '') {
+                $gateway = strtolower((string) $stored['gateway_code']);
+            }
+        } else {
+            foreach (['merchant_order_id', 'orderNumber', 'OrderID', 'orderId'] as $key) {
+                $value = $scalar($payload[$key] ?? '');
+                if ($value === '') {
+                    continue;
+                }
+                $stored = $this->payments->findByMerchantOrderId($value)
+                    ?? $this->payments->findByProviderOrderId('etisalat', $value)
+                    ?? $this->payments->findByProviderOrderId('meezan', $value);
+                if ($stored !== null && (string) ($stored['gateway_code'] ?? '') !== '') {
+                    $gateway = strtolower((string) $stored['gateway_code']);
+                    break;
+                }
+            }
+        }
+
+        try {
+            $redirect = $this->handleReturn($request, $gateway === 'meezan' ? 'meezan' : 'etisalat');
+        } catch (\Throwable $e) {
+            $this->logger->payment('Fundraise result verification failed', [
+                'gateway' => $gateway,
+                'error'   => $e->getMessage(),
+            ]);
+            $redirect = $this->redirect('/donation/failed?reason=unknown');
+        }
+
+        $location = (string) ($redirect->headers()['Location'] ?? '');
+        $query = [];
+        parse_str((string) (parse_url($location, PHP_URL_QUERY) ?? ''), $query);
+        $reference = isset($query['ref']) && is_scalar($query['ref']) ? trim((string) $query['ref']) : '';
+        $reason = isset($query['reason']) && is_scalar($query['reason']) ? trim((string) $query['reason']) : '';
+
+        $outcome = 'failed';
+        if (str_contains($location, '/donation/success')) {
+            $outcome = 'completed';
+        } elseif (str_contains($location, '/donation/processing')) {
+            $outcome = 'processing';
+        }
+
+        $donation = $reference !== '' ? $this->donationRecords->findByReference($reference) : null;
+
+        $retryUrl = Response::locationFor('/fundraisers');
+        if ($donation !== null && !empty($donation['fundraiser_slug'])) {
+            $retryUrl = Response::locationFor('/donate/' . rawurlencode((string) $donation['fundraiser_slug']));
+        }
+
+        $titles = [
+            'completed'  => 'Payment successful',
+            'processing' => 'Payment being confirmed',
+            'failed'     => 'Payment not completed',
+        ];
+
+        $response = $this->render('public/donate/response', [
+            'pageTitle'  => $titles[$outcome],
+            'outcome'    => $outcome,
+            'reason'     => $reason,
+            'reference'  => $reference,
+            'donation'   => $donation,
+            'amountText' => $donation !== null
+                ? Money::format((int) $donation['amount_minor'], (string) ($donation['currency'] ?? 'PKR'))
+                : '',
+            'retryUrl'   => $retryUrl,
+            'statusUrl'  => $reference !== ''
+                ? Response::locationFor('/donation/' . rawurlencode($reference))
+                : Response::locationFor('/fundraisers'),
+            'org'        => (array) Config::get('app.org', []),
+        ]);
+
+        return $response->withHeader('Cache-Control', 'no-store');
     }
 
     private function handleReturn(Request $request, string $gateway): Response

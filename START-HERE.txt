@@ -250,15 +250,17 @@ administrator account exists.
  sent to the bank's hosted payment page. Payment outcomes are always verified
  server-to-server before a donation is marked complete.
 
- For a new UBL / Etisalat EPG setup, give the bank this ReturnPath (include
- '/donate' if the site is installed in that subfolder):
+ For UBL / Etisalat EPG the ReturnPath is the standalone response page, exactly
+ like the Qurbani site (include '/donate' if the site is installed in that
+ subfolder). If the bank keeps a list of approved return URLs, give it:
 
-   https://yourdomain.com/payments/etisalat/return
-   https://yourdomain.com/donate/payments/etisalat/return
+   https://yourdomain.com/fundraise-response.php
+   https://yourdomain.com/donate/fundraise-response.php
 
- Etisalat returns its TransactionID to that route by POST. The standalone
- fundraise-response.php page remains for older EPG integrations and for the
- Meezan browser return; it can still render the donation result page.
+ Each payment is registered with ?OrderID=<order id> appended. The bank POSTs
+ its TransactionID to that page. The older /payments/etisalat/return route
+ stays registered for payments already in flight, and fundraise-response.php
+ also serves the Meezan browser return.
 
  Gateway addresses are set automatically from 'site_url' in config.php, and
  merchant credentials stay in Admin > Settings > Payment gateways. Nothing

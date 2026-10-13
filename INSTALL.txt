@@ -378,9 +378,10 @@ Steps:
   1. Enter credentials in .env or Admin > Settings > Etisalat. The merchant
      password remains encrypted server-side and is never re-displayed. EPG
      credentials are sent only in server-side JSON requests and are not logged.
-  2. Give UBL this site's exact return route (include the install subfolder):
-       https://yourdomain.example/payments/etisalat/return
-     The route must accept the gateway's POST containing TransactionID. Keep
+  2. Give UBL this site's return page (include the install subfolder):
+       https://yourdomain.example/fundraise-response.php
+     Each payment is registered with ?OrderID=<order id> appended, and the
+     page accepts the gateway's POST containing TransactionID. Keep
      the full ReturnPath under the EPG's 256-character limit.
   3. Confirm the EPG API host, port and TransactionHint with UBL. Do not use
      /epg/rest on the API URL. The PaymentPage is a separate URL returned by
@@ -906,7 +907,7 @@ Donors are sent to the provider but returns never complete
   Most often the provider has not allowlisted your return URL, or the return URL
   differs from the one registered. Check that
   https://<your-domain>/payments/meezan/return and
-  https://<your-domain>/payments/etisalat/return are the exact URLs on file with
+  https://<your-domain>/fundraise-response.php are the exact URLs on file with
   the bank, then confirm the scheduled reconciliation is running:
     php bin/console payments:reconcile
 

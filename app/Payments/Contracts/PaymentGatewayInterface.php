@@ -55,5 +55,5 @@ interface PaymentGatewayInterface
      * Where the donor should be sent after the provider page.
      * Used when building the registration request.
      */
-    public function returnUrl(string $callbackState): string;
+    public function returnUrl(string $callbackState, ?string $merchantOrderId = null): string;
 }
