@@ -38,6 +38,15 @@ $cover = $isEdit && !empty($fundraiser['cover_image_path']) ? base_url((string) 
   </div>
 </div>
 
+<?php if (($categories ?? []) === []): ?>
+  <div class="alert alert-warning" role="alert">
+    <div>
+      <strong>No causes are available yet.</strong>
+      <p>A fundraiser must belong to a cause, and none have been set up on this site yet, so the form cannot be submitted. Please contact the Almarah Foundation team and ask them to add the causes (Admin → seed the fundraiser categories), then try again.</p>
+    </div>
+  </div>
+<?php endif; ?>
+
 <form method="post" action="<?= e($action) ?>" enctype="multipart/form-data" class="panel" novalidate>
   <?= csrf_field() ?>
 
@@ -63,10 +72,11 @@ $cover = $isEdit && !empty($fundraiser['cover_image_path']) ? base_url((string) 
 
     <div class="field">
       <label for="impact_statement">What your supporters are funding</label>
-      <input class="input" type="text" id="impact_statement" name="impact_statement" maxlength="500"
+      <input class="input" type="text" id="impact_statement" name="impact_statement" maxlength="180"
              value="<?= old('impact_statement', $isEdit ? (string) ($fundraiser['impact_statement'] ?? '') : '') ?>"
              placeholder="Rs 5,000 feeds a child for a month">
-      <span class="form-help">One short line shown on your card and page. Optional but it helps a lot.</span>
+      <span class="form-help">One short line (up to 180 characters) shown on your card and page. Optional but it helps a lot.</span>
+      <?php if (error_for('impact_statement') !== ''): ?><span class="field-error"><?= error_for('impact_statement') ?></span><?php endif; ?>
     </div>
   </fieldset>
 
@@ -100,6 +110,7 @@ $cover = $isEdit && !empty($fundraiser['cover_image_path']) ? base_url((string) 
           <?php endforeach; ?>
         </select>
         <span class="form-help">Linking to a campaign puts your page in front of people browsing that appeal.</span>
+        <?php if (error_for('campaign_id') !== ''): ?><span class="field-error"><?= error_for('campaign_id') ?></span><?php endif; ?>
       </div>
     </div>
   </fieldset>
@@ -130,6 +141,7 @@ $cover = $isEdit && !empty($fundraiser['cover_image_path']) ? base_url((string) 
         <input class="input" type="date" id="end_at" name="end_at"
                value="<?= old('end_at', $isEdit && !empty($fundraiser['end_at']) ? substr((string) $fundraiser['end_at'], 0, 10) : (string) ($defaultEnd ?? '')) ?>">
         <span class="form-help">Leave blank for an open-ended fundraiser.</span>
+        <?php if (error_for('end_at') !== ''): ?><span class="field-error"><?= error_for('end_at') ?></span><?php endif; ?>
       </div>
     </div>
   </fieldset>

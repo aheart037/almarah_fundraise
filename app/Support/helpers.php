@@ -149,11 +149,37 @@ if (!function_exists('csrf_token')) {
     }
 }
 
+if (!function_exists('_flash_memo')) {
+    /**
+     * Read a one-shot flash value once per request and remember it.
+     *
+     * Session::getFlash() deletes the value on read. Views, however, ask for
+     * the same flash data many times in one page: the fundraiser form calls
+     * error_for()/old() once per field and the layout's alerts partial calls
+     * errors()/flash() again afterwards. Because the content view renders
+     * before its layout, the very first error_for('title') used to consume
+     * the whole _errors/_old payload — every other field error, the error
+     * summary and all repopulated input silently vanished, so a rejected
+     * form came back looking identical to a fresh one and "nothing was
+     * created" with no explanation. Memoising per request keeps the flash
+     * one-shot across requests while making it freely readable within the
+     * request that renders it.
+     */
+    function _flash_memo(string $key, mixed $default = null): mixed
+    {
+        static $memo = [];
+        if (!array_key_exists($key, $memo)) {
+            $memo[$key] = session()->getFlash($key, $default);
+        }
+        return $memo[$key];
+    }
+}
+
 if (!function_exists('old')) {
     /** Previously submitted value, echoed safely. */
     function old(string $key, mixed $default = ''): string
     {
-        $old = session()->getFlash('_old', []);
+        $old = _flash_memo('_old', []);
         $value = is_array($old) && array_key_exists($key, $old) ? $old[$key] : $default;
         return e($value);
     }
@@ -163,7 +189,7 @@ if (!function_exists('errors')) {
     /** @return array<string,string> */
     function errors(): array
     {
-        $errors = session()->getFlash('_errors', []);
+        $errors = _flash_memo('_errors', []);
         return is_array($errors) ? $errors : [];
     }
 }
@@ -179,7 +205,7 @@ if (!function_exists('error_for')) {
 if (!function_exists('flash')) {
     function flash(string $key, mixed $default = null): mixed
     {
-        return session()->getFlash($key, $default);
+        return _flash_memo($key, $default);
     }
 }
 

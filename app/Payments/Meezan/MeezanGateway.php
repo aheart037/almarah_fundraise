@@ -71,7 +71,12 @@ final class MeezanGateway implements PaymentGatewayInterface
 
     public function returnUrl(string $callbackState): string
     {
-        return rtrim($this->baseUrl, '/') . '/payments/meezan/return?state=' . rawurlencode($callbackState);
+        // Donors come back through the standalone fundraise-response.php
+        // page (the same pattern as qurbani-response.php on the Qurbani
+        // site), which verifies the payment server-to-server before
+        // anything is counted. The older /payments/meezan/return route
+        // stays registered for transactions already in flight.
+        return rtrim($this->baseUrl, '/') . '/fundraise-response.php?state=' . rawurlencode($callbackState);
     }
 
     /**

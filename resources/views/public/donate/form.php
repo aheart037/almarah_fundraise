@@ -47,8 +47,13 @@ $returnUrl = base_url('donate/' . $targetSlug) . ($targetType !== 'fundraiser' ?
           </div>
         <?php endif; ?>
 
-        <form method="post" action="<?= e(base_url('donate/' . $targetSlug)) ?>" class="panel" novalidate>
+        <?php // Donations are handed to the gateway through fundraise-submit.php
+              // (the fundraise counterpart of qurbani-submit.php), which registers
+              // the payment and returns the donor via fundraise-response.php.
+              // The /donate/{target} POST route remains as an alias. ?>
+        <form method="post" action="<?= e(base_url('fundraise-submit.php')) ?>" class="panel" novalidate>
           <?= csrf_field() ?>
+          <input type="hidden" name="target" value="<?= e($targetSlug) ?>">
           <input type="hidden" name="type" value="<?= e($targetType) ?>">
           <input type="hidden" name="amount" id="amountValue" data-amount-input value="<?= e(number_format($selectedMinor / 100, 2, '.', '')) ?>">
 

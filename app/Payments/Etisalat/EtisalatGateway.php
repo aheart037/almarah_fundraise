@@ -72,10 +72,15 @@ final class EtisalatGateway implements PaymentGatewayInterface
     public function returnUrl(string $callbackState): string
     {
         // The EPG ReturnPath is a browser POST that contains the provider's
-        // TransactionID. Keep this URL compact (the integration guide limits
-        // ReturnPath to 256 characters); PaymentController resolves the posted
-        // ID to the stored transaction and re-derives our signed state.
-        $url = rtrim($this->baseUrl, '/') . '/payments/etisalat/return';
+        // TransactionID. It points at the standalone fundraise-response.php
+        // page (the same pattern as qurbani-response.php on the Qurbani
+        // site), which runs Finalization through PaymentController and
+        // renders the result. Keep this URL compact (the integration guide
+        // limits ReturnPath to 256 characters); PaymentController resolves
+        // the posted ID to the stored transaction and re-derives our signed
+        // state. The older /payments/etisalat/return route stays registered
+        // for transactions already in flight.
+        $url = rtrim($this->baseUrl, '/') . '/fundraise-response.php';
         if (strlen($url) > 256) {
             throw new PaymentGatewayException(
                 'The Etisalat return URL exceeds the gateway 256-character limit. Shorten the configured site URL.',
