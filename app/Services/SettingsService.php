@@ -257,16 +257,68 @@ final class SettingsService
         return (bool) ($this->gatewayConfig($code)['enabled'] ?? false);
     }
 
-    /** @return array<string,bool> */
+    /**
+     * Readiness snapshot for the admin settings and dashboard screens.
+     *
+     * Keep "enabled" separate from "configured": an administrator can have
+     * complete merchant details saved while deliberately leaving payments off.
+     * Only safe labels and booleans are returned; credential values never leave
+     * this service through the status API.
+     *
+     * @return array<string,array{
+     *   code:string,
+     *   enabled:bool,
+     *   configured:bool,
+     *   environment:string,
+     *   missing:array<int,string>,
+     *   has_username:bool,
+     *   has_password:bool
+     * }>
+     */
     public function gatewayStatus(): array
     {
+        $requiredByGateway = [
+            'meezan' => [
+                'username'    => 'Merchant username',
+                'password'    => 'Merchant password',
+                'sandbox_url' => 'Sandbox endpoint',
+                'live_url'    => 'Live endpoint',
+            ],
+            'etisalat' => [
+                'customer'    => 'Customer ID',
+                'username'    => 'Merchant username / ID',
+                'password'    => 'Merchant password',
+                'sandbox_url' => 'Sandbox gateway host',
+                'live_url'    => 'Live gateway host',
+            ],
+        ];
+
         $out = [];
         foreach (array_keys($this->gatewayDefaults['gateways'] ?? []) as $code) {
             $config = $this->gatewayConfig($code);
-            $out[$code] = (bool) ($config['enabled'] ?? false)
-                && (string) ($config['username'] ?? '') !== ''
-                && (string) ($config['password'] ?? '') !== '';
+            $required = $requiredByGateway[$code] ?? [
+                'username' => 'Merchant username',
+                'password' => 'Merchant password',
+            ];
+            $missing = [];
+
+            foreach ($required as $field => $label) {
+                if (trim((string) ($config[$field] ?? '')) === '') {
+                    $missing[] = $label;
+                }
+            }
+
+            $out[$code] = [
+                'code'         => $code,
+                'enabled'      => (bool) ($config['enabled'] ?? false),
+                'configured'   => $missing === [],
+                'environment'  => (string) ($config['environment'] ?? 'sandbox'),
+                'missing'      => $missing,
+                'has_username' => trim((string) ($config['username'] ?? '')) !== '',
+                'has_password' => trim((string) ($config['password'] ?? '')) !== '',
+            ];
         }
+
         return $out;
     }
 }

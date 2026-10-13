@@ -49,8 +49,8 @@ $returnUrl = base_url('donate/' . $targetSlug) . ($targetType !== 'fundraiser' ?
 
         <?php // Donations are handed to the gateway through fundraise-submit.php
               // (the fundraise counterpart of qurbani-submit.php), which registers
-              // the payment and returns the donor via fundraise-response.php.
-              // The /donate/{target} POST route remains as an alias. ?>
+              // the payment. Etisalat returns via /payments/etisalat/return;
+              // fundraise-response.php remains for the Meezan return and older installs. ?>
         <form method="post" action="<?= e(base_url('fundraise-submit.php')) ?>" class="panel" novalidate>
           <?= csrf_field() ?>
           <input type="hidden" name="target" value="<?= e($targetSlug) ?>">

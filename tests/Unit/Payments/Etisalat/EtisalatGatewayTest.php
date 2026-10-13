@@ -27,7 +27,7 @@ final class EtisalatGatewayTest extends TestCase
                     $orderInfo = $registration['OrderInfo'] ?? null;
                     return ($registration['Amount'] ?? null) === '10.50'
                         && ($registration['TransactionHint'] ?? null) === 'CPT:Y;VCC:Y;'
-                        && ($registration['ReturnPath'] ?? null) === 'https://fundraise.example/fundraise-response.php'
+                        && ($registration['ReturnPath'] ?? null) === 'https://fundraise.example/payments/etisalat/return'
                         && is_string($orderInfo)
                         && strlen($orderInfo) <= 50
                         && preg_match('/^[A-Za-z0-9 ]*$/D', $orderInfo) === 1;
@@ -172,7 +172,7 @@ final class EtisalatGatewayTest extends TestCase
         $returnPath = $this->gateway($this->createMock(HttpClientInterface::class))
             ->returnUrl('secret-callback-state-token');
 
-        self::assertSame('https://fundraise.example/fundraise-response.php', $returnPath);
+        self::assertSame('https://fundraise.example/payments/etisalat/return', $returnPath);
         self::assertLessThanOrEqual(256, strlen($returnPath));
         self::assertStringNotContainsString('secret-callback-state-token', $returnPath);
     }

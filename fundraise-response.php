@@ -10,10 +10,10 @@ declare(strict_types=1);
  * card authentication, and this page settles the payment and shows the
  * result.
  *
- *   - UBL / Etisalat EPG POSTs its TransactionID here (this URL is the
- *     ReturnPath sent with every Registration — see
- *     EtisalatGateway::returnUrl()). Meezan returns here by GET with the
- *     signed state issued at registration.
+ *   - New UBL / Etisalat EPG registrations return by POST to the canonical
+ *     /payments/etisalat/return route. This standalone page remains available
+ *     for older EPG registrations. Meezan returns here by GET with the signed
+ *     state issued at registration.
  *   - The payment is then verified SERVER-TO-SERVER with the gateway
  *     (EPG Finalization / Meezan getOrderStatus) through the platform's
  *     PaymentController + DonationService. Nothing the browser claims —
@@ -24,10 +24,10 @@ declare(strict_types=1);
  *     what to do next. Refreshing is safe: callback handling is
  *     idempotent, so a reload simply re-reads the stored outcome.
  *
- * The older routes /payments/etisalat/return and /payments/meezan/return
- * remain registered and run the identical verification for any transaction
- * registered before this page existed; both end on the /donation status
- * pages, while donors who come through fundraise-submit.php land here.
+ * Both routed callback endpoints remain registered for new and in-flight
+ * transactions. This file is retained as a compatibility result page and for
+ * Meezan registrations; routed callbacks end on the canonical /donation status
+ * pages.
  */
 
 // This folder is the website (see index.php).

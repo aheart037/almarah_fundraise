@@ -243,29 +243,26 @@ administrator account exists.
 
 
 ------------------------------------------------------------------------------
- THE TWO PAYMENT PAGES (fundraise-submit.php / fundraise-response.php)
+ PAYMENT PAGES AND BANK RETURN URL
 ------------------------------------------------------------------------------
- Like qurbani-submit.php and qurbani-response.php on the Qurbani website,
- donations travel through two standalone pages in the site's main folder:
+ The donation form hands the donor's details to fundraise-submit.php. The
+ donation is saved and registered with the payment gateway, then the donor is
+ sent to the bank's hosted payment page. Payment outcomes are always verified
+ server-to-server before a donation is marked complete.
 
-   fundraise-submit.php    the donation form sends the donor's details here;
-                           the donation is saved and registered with the
-                           payment gateway (EPG Registration), and the
-                           donor is handed over to the bank's payment page.
-   fundraise-response.php  the bank sends the donor back here afterwards;
-                           the payment is confirmed with the bank
-                           server-to-server (EPG Finalization) and the
-                           donor sees the result — success, processing or
-                           not completed — with the donation reference.
+ For a new UBL / Etisalat EPG setup, give the bank this ReturnPath (include
+ '/donate' if the site is installed in that subfolder):
 
- If the bank asks for your ReturnPath / return URL, it is:
+   https://yourdomain.com/payments/etisalat/return
+   https://yourdomain.com/donate/payments/etisalat/return
 
-   https://yourdomain.com/fundraise-response.php
-   (or https://yourdomain.com/donate/fundraise-response.php in a subfolder)
+ Etisalat returns its TransactionID to that route by POST. The standalone
+ fundraise-response.php page remains for older EPG integrations and for the
+ Meezan browser return; it can still render the donation result page.
 
- The gateway addresses are set automatically from 'site_url' in config.php,
- and merchant credentials stay where they have always been — Admin >
- Settings > Payment gateways. Nothing needs editing inside the two pages.
+ Gateway addresses are set automatically from 'site_url' in config.php, and
+ merchant credentials stay in Admin > Settings > Payment gateways. Nothing
+ needs editing inside the two payment pages.
 
 
 ------------------------------------------------------------------------------
