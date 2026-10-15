@@ -102,12 +102,6 @@ $trustPoints = array_values(array_filter(
             <span><small>Rooted in care</small><strong>A place to grow</strong></span>
           </div>
         </div>
-        <div class="home-hero__float-card">
-          <span class="home-hero__float-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1L12 21l7.7-7.6 1.1-1a5.5 5.5 0 0 0 0-7.8Z"/></svg>
-          </span>
-          <span><strong>Every gift matters</strong><small>Care, learning and nourishment</small></span>
-        </div>
       </div>
     </div>
   </section>
@@ -324,7 +318,7 @@ $trustPoints = array_values(array_filter(
       </div>
       <div class="home-about__visual">
         <div class="home-about__photo">
-          <img src="<?= e(asset('assets/img/fund-family.jpg')) ?>" alt="Children spending time together in their community in Pakistan" loading="lazy" width="680" height="760">
+          <img src="<?= e(asset('assets/img/family.jpg')) ?>" alt="Children spending time together in their community in Pakistan" loading="lazy" width="680" height="760">
         </div>
         <div class="home-about__photo-note">
           <span aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-8-4.5-8-11a4.5 4.5 0 0 1 8-2.8A4.5 4.5 0 0 1 20 10c0 6.5-8 11-8 11Z"/></svg></span>

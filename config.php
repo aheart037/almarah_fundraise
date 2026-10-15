@@ -19,13 +19,13 @@
 return [
 
     // 1. Database name      e.g. 'almarf1_almarah_platform'
-    'db_name' => 'sophiyaw_almarah_platform',
+    'db_name' => '****',
 
     // 2. Database username  e.g. 'almarf1_almarah'
-    'db_user' => 'sophiyaw_inv',
+    'db_user' => '*****',
 
     // 3. Database password  the one you set in cPanel > MySQL Databases
-    'db_pass' => 'Sameer@123',
+    'db_pass' => '*****',
 
 
     /* ------------------------------------------------------------------------
