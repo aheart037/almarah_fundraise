@@ -21,6 +21,8 @@ use Throwable;
  */
 final class MailQueue
 {
+    private bool $drainScheduled = false;
+
     public function __construct(
         private Database $db,
         private TransportInterface $transport,
@@ -74,6 +76,7 @@ final class MailQueue
                 $this->logger->info('Duplicate email job suppressed', ['event' => $eventKey, 'dedupe' => $dedupeKey]);
                 return null;
             }
+            $this->scheduleDelivery();
             return (int) $this->db->scalar('SELECT id FROM email_jobs WHERE dedupe_key = :k', ['k' => $dedupeKey]);
         }
 
@@ -83,6 +86,8 @@ final class MailQueue
         // small deployment still delivers transactional mail.
         if (!$this->queueEnabled()) {
             $this->processJob($id);
+        } else {
+            $this->scheduleDelivery();
         }
 
         return $id;
@@ -137,6 +142,47 @@ final class MailQueue
     public function processJobNow(int $jobId): bool
     {
         return $this->processJob($jobId);
+    }
+
+    /**
+     * Send queued mail right after this web request has been answered, so
+     * receipts and notices go out even when no cron job runs `mail:work`.
+     *
+     * The visitor's page is never delayed: the response is finished first.
+     * Jobs are claimed atomically, so this and a cron worker can never send
+     * the same email twice. A cron worker is still recommended as a backup
+     * for retries.
+     */
+    private function scheduleDelivery(): void
+    {
+        if ($this->drainScheduled || PHP_SAPI === 'cli') {
+            return;
+        }
+        $this->drainScheduled = true;
+
+        register_shutdown_function(function (): void {
+            try {
+                // Let the visitor's browser have the finished page first.
+                if (function_exists('fastcgi_finish_request')) {
+                    @fastcgi_finish_request();
+                } elseif (function_exists('litespeed_finish_request')) {
+                    @litespeed_finish_request();
+                }
+
+                ignore_user_abort(true);
+                @set_time_limit(90);
+
+                // Do not hold the visitor's session lock while talking to SMTP.
+                if (session_status() === PHP_SESSION_ACTIVE) {
+                    session_write_close();
+                }
+
+                $this->recoverStuck(15);
+                $this->work(10);
+            } catch (Throwable $e) {
+                error_log('[almarah] background mail delivery failed: ' . $e->getMessage());
+            }
+        });
     }
 
     public function queueEnabled(): bool

@@ -69,6 +69,43 @@ final class CampaignRepository
         $this->db->update('campaigns', $payload, 'id = :id', ['id' => $id]);
     }
 
+    /**
+     * Is the slug used by ANY campaign row, including removed ones? The
+     * database's unique index also covers soft-deleted rows, so an admin form
+     * must check against all of them, not only the visible ones.
+     */
+    public function slugTaken(string $slug, ?int $exceptId = null): bool
+    {
+        $sql = 'SELECT id FROM campaigns WHERE slug = :slug';
+        $params = ['slug' => $slug];
+        if ($exceptId !== null) {
+            $sql .= ' AND id <> :id';
+            $params['id'] = $exceptId;
+        }
+        return $this->db->selectOne($sql, $params) !== null;
+    }
+
+    /**
+     * Remove a campaign from the site. The row is kept (soft delete) so past
+     * donations and fundraisers that referenced it keep their history; its
+     * slug is released so the same address can be used again.
+     */
+    public function softDelete(int $id): void
+    {
+        $campaign = $this->find($id);
+        if ($campaign === null) {
+            return;
+        }
+
+        $released = mb_substr((string) $campaign['slug'], 0, 150) . '-removed-' . $id;
+        $this->db->update(
+            'campaigns',
+            ['slug' => $released, 'status' => 'closed', 'featured' => 0, 'deleted_at' => gmdate('Y-m-d H:i:s')],
+            'id = :id',
+            ['id' => $id]
+        );
+    }
+
     /** @return array<int,array<string,mixed>> */
     public function active(int $limit = 50): array
     {

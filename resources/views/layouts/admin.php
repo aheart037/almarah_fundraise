@@ -56,6 +56,10 @@ $fullName = trim((string) ($authUser['first_name'] ?? '') . ' ' . (string) ($aut
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
           Fundraisers
         </a>
+        <a href="<?= e(base_url('admin/campaigns')) ?>" class="<?= $is('/admin/campaigns') ?>">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l18-8v18L3 13z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>
+          Campaigns
+        </a>
         <a href="<?= e(base_url('admin/donations')) ?>" class="<?= $is('/admin/donations') ?>">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1L12 21.2l7.7-7.8 1.1-1a5.5 5.5 0 0 0 0-7.8z"/></svg>
           Donations
@@ -108,6 +112,7 @@ $fullName = trim((string) ($authUser['first_name'] ?? '') . ' ' . (string) ($aut
 <div class="mobile-panel" id="mobilePanel">
   <a class="m-link" href="<?= e(base_url('admin')) ?>">Overview</a>
   <a class="m-link" href="<?= e(base_url('admin/fundraisers')) ?>">Fundraisers</a>
+  <a class="m-link" href="<?= e(base_url('admin/campaigns')) ?>">Campaigns</a>
   <a class="m-link" href="<?= e(base_url('admin/donations')) ?>">Donations</a>
   <a class="m-link" href="<?= e(base_url('admin/users')) ?>">Users</a>
   <a class="m-link" href="<?= e(base_url('admin/settings')) ?>">Settings</a>

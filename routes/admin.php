@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 use App\Core\Router;
 use App\Http\Controllers\Admin\AuditController;
+use App\Http\Controllers\Admin\CampaignController;
 use App\Http\Controllers\Admin\ContentController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\DonationController;
@@ -41,6 +42,14 @@ return static function (Router $router) use ($admin, $adminCsrf, $superCsrf): vo
     $router->post('/admin/fundraisers/{id}/feature', [FundraiserController::class, 'feature'], $adminCsrf, 'admin.fundraisers.feature');
     $router->post('/admin/fundraisers/{id}/delete', [FundraiserController::class, 'destroy'], $adminCsrf, 'admin.fundraisers.delete');
     $router->post('/admin/fundraisers/{id}/updates/{updateId}/hide', [FundraiserController::class, 'hideUpdate'], $adminCsrf, 'admin.fundraisers.updates.hide');
+
+    // --- campaigns ----------------------------------------------------------
+    $router->get('/admin/campaigns', [CampaignController::class, 'index'], $admin, 'admin.campaigns');
+    $router->get('/admin/campaigns/create', [CampaignController::class, 'create'], $admin, 'admin.campaigns.create');
+    $router->post('/admin/campaigns', [CampaignController::class, 'store'], $adminCsrf, 'admin.campaigns.store');
+    $router->get('/admin/campaigns/{id}/edit', [CampaignController::class, 'edit'], $admin, 'admin.campaigns.edit');
+    $router->post('/admin/campaigns/{id}', [CampaignController::class, 'update'], $adminCsrf, 'admin.campaigns.update');
+    $router->post('/admin/campaigns/{id}/delete', [CampaignController::class, 'destroy'], $adminCsrf, 'admin.campaigns.delete');
 
     // --- donations and payments ---------------------------------------------
     $router->get('/admin/donations', [DonationController::class, 'index'], $admin, 'admin.donations');

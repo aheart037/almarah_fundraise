@@ -114,15 +114,29 @@ $app->bind(AuditService::class, static fn (App $c): AuditService => new AuditSer
 $app->bind(TransportInterface::class, static function (App $c): TransportInterface {
     /** @var SettingsService $settings */
     $settings = $c->make(SettingsService::class);
-    return new SmtpTransport(array_merge(Config::array('mail'), $settings->mailOverrides()), $c->make(Logger::class));
+    // Only settings that were really saved override the configuration file /
+    // .env. mailOverrides() returns null for the ones that were not, and a
+    // plain array_merge would let those nulls erase working values.
+    $saved = array_filter($settings->mailOverrides(), static fn ($value): bool => $value !== null);
+    return new SmtpTransport(array_merge(Config::array('mail'), $saved), $c->make(Logger::class));
 });
-$app->bind(MailQueue::class, static fn (App $c): MailQueue => new MailQueue(
-    $c->make(Database::class),
-    $c->make(TransportInterface::class),
-    $c->make(EmailTemplateService::class),
-    $c->make(Logger::class),
-    Config::array('mail')
-));
+$app->bind(MailQueue::class, static function (App $c): MailQueue {
+    $mail = Config::array('mail');
+
+    // The "Queue emails" switch in Admin → Settings is stored in the database;
+    // honour it (it used to be saved but never read).
+    /** @var SettingsService $settings */
+    $settings = $c->make(SettingsService::class);
+    $mail['queue']['enabled'] = $settings->bool('mail.queue_enabled', (bool) ($mail['queue']['enabled'] ?? true));
+
+    return new MailQueue(
+        $c->make(Database::class),
+        $c->make(TransportInterface::class),
+        $c->make(EmailTemplateService::class),
+        $c->make(Logger::class),
+        $mail
+    );
+});
 $app->bind(Mailer::class, static fn (App $c): Mailer => new Mailer(
     $c->make(MailQueue::class),
     $c->make(EmailTemplateService::class),
