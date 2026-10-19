@@ -58,6 +58,20 @@ $ownerName = trim((string) ($owner['first_name'] ?? '') . ' ' . (string) ($owner
   </div>
 </div>
 
+<?php $coverPath = trim((string) ($fundraiser['cover_image_path'] ?? '')); ?>
+<section class="panel">
+  <h2>Cover image</h2>
+  <?php if ($coverPath !== ''): ?>
+    <a href="<?= e(base_url($coverPath)) ?>" target="_blank" rel="noopener" title="Open full size">
+      <img src="<?= e(base_url($coverPath)) ?>" alt="Cover image uploaded for <?= e((string) $fundraiser['title']) ?>"
+           style="display:block;max-width:100%;max-height:420px;border-radius:var(--radius);box-shadow:var(--shadow-sm)">
+    </a>
+    <p class="muted" style="margin:10px 0 0;font-size:13px">Check this picture is appropriate before approving. Click it to open full size.</p>
+  <?php else: ?>
+    <p class="muted" style="margin:0">No cover image was uploaded. The public page will show the default picture.</p>
+  <?php endif; ?>
+</section>
+
 <div class="grid-2">
   <section class="panel">
     <h2>The page</h2>
@@ -205,6 +219,12 @@ $ownerName = trim((string) ($owner['first_name'] ?? '') . ' ' . (string) ($owner
           <span class="when"><?= e(dt((string) ($update['published_at'] ?? $update['created_at']), 'j M Y')) ?></span>
           <div class="what"><?= e((string) $update['title']) ?> <span class="badge badge-grey"><?= e((string) $update['status']) ?></span></div>
           <div class="meta"><?= e(mb_substr((string) $update['body'], 0, 200)) ?></div>
+          <?php if (!empty($update['image_path'])): ?>
+            <a href="<?= e(base_url((string) $update['image_path'])) ?>" target="_blank" rel="noopener" title="Open full size">
+              <img src="<?= e(base_url((string) $update['image_path'])) ?>" alt="Image attached to this update" loading="lazy"
+                   style="display:block;max-width:260px;max-height:180px;margin-top:8px;border-radius:var(--radius);box-shadow:var(--shadow-sm)">
+            </a>
+          <?php endif; ?>
           <?php if ((string) $update['status'] === 'published'): ?>
             <form method="post" class="inline-form mt-1" action="<?= e(base_url('admin/fundraisers/' . $id . '/updates/' . (string) $update['id'] . '/hide')) ?>"
                   data-confirm="Hide this update from the public page?">
