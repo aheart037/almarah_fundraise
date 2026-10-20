@@ -549,7 +549,8 @@ h2.section-title {
 .choice input { position: absolute; left: 18px; top: 20px; accent-color: var(--brand); width: 17px; height: 17px; }
 .choice b { display: block; font-family: var(--font-head); font-size: .96rem; color: var(--ink); margin-bottom: 3px; }
 .choice span { font-size: .84rem; color: var(--muted); line-height: 1.5; display: block; }
-.choice.sel { border-color: var(--brand); background: var(--brand-tint); box-shadow: var(--ring); }
+.choice.sel, .choice.active, .choice:has(input:checked) { border-color: var(--brand); background: var(--brand-tint); box-shadow: var(--ring); }
+.choice .choice-logo { display: block; height: 32px; width: auto; max-width: 100%; object-fit: contain; object-position: left center; margin: 0 0 10px; }
 
 .amount-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
 .amount-btn {

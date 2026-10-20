@@ -10,6 +10,8 @@ declare(strict_types=1);
 use App\Core\Router;
 use App\Http\Controllers\Admin\AuditController;
 use App\Http\Controllers\Admin\CampaignController;
+use App\Http\Controllers\Admin\MenuController;
+use App\Http\Controllers\Admin\TypographyController;
 use App\Http\Controllers\Admin\ContentController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\DonationController;
@@ -50,6 +52,16 @@ return static function (Router $router) use ($admin, $adminCsrf, $superCsrf): vo
     $router->get('/admin/campaigns/{id}/edit', [CampaignController::class, 'edit'], $admin, 'admin.campaigns.edit');
     $router->post('/admin/campaigns/{id}', [CampaignController::class, 'update'], $adminCsrf, 'admin.campaigns.update');
     $router->post('/admin/campaigns/{id}/delete', [CampaignController::class, 'destroy'], $adminCsrf, 'admin.campaigns.delete');
+
+    // --- appearance: fonts and menus ----------------------------------------
+    $router->get('/admin/typography', [TypographyController::class, 'index'], $admin, 'admin.typography');
+    $router->post('/admin/typography', [TypographyController::class, 'save'], $adminCsrf, 'admin.typography.save');
+    $router->post('/admin/typography/reset', [TypographyController::class, 'reset'], $adminCsrf, 'admin.typography.reset');
+    $router->get('/admin/menus', [MenuController::class, 'index'], $admin, 'admin.menus');
+    $router->post('/admin/menus', [MenuController::class, 'store'], $adminCsrf, 'admin.menus.store');
+    $router->get('/admin/menus/{id}/edit', [MenuController::class, 'edit'], $admin, 'admin.menus.edit');
+    $router->post('/admin/menus/{id}', [MenuController::class, 'update'], $adminCsrf, 'admin.menus.update');
+    $router->post('/admin/menus/{id}/delete', [MenuController::class, 'destroy'], $adminCsrf, 'admin.menus.delete');
 
     // --- donations and payments ---------------------------------------------
     $router->get('/admin/donations', [DonationController::class, 'index'], $admin, 'admin.donations');

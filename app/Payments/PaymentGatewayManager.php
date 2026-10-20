@@ -221,8 +221,9 @@ final class PaymentGatewayManager
             $config = $this->settings->gatewayConfig($code);
             $choices[] = [
                 'code'        => $code,
-                'label'       => $gateway->label(),
-                'description' => (string) ($config['description'] ?? ''),
+                'label'       => (string) (($config['checkout_label'] ?? '') !== '' ? $config['checkout_label'] : $gateway->label()),
+                'description' => (string) (($config['checkout_description'] ?? '') !== '' ? $config['checkout_description'] : ($config['description'] ?? '')),
+                'logo'        => (string) ($config['checkout_logo'] ?? ''),
             ];
         }
         return $choices;

@@ -189,16 +189,17 @@ if ($endTs === false || $endTs === null) {
 .cmp-page{--c-pink:#af2f67;--c-deep:#6b1038;--c-gold:#ffda00;--c-ink:#2a1020;--c-mute:#7a4560;--c-line:#efdde6;--c-soft:#fceef4}
 
 /* Hero */
-.cmp-hero{position:relative;isolation:isolate;display:flex;align-items:flex-end;min-height:clamp(320px,46vh,480px);padding:clamp(28px,5vw,48px) 0 clamp(72px,9vw,96px);color:#fff;overflow:hidden}
-.cmp-hero-bg{position:absolute;inset:0;z-index:-2;background-size:cover;background-position:center}
-.cmp-hero::before{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(180deg,rgba(42,16,32,.5) 0%,rgba(107,16,56,.9) 100%)}
+.cmp-hero{position:relative;isolation:isolate;display:flex;align-items:flex-end;min-height:clamp(360px,54vh,560px);padding:clamp(28px,5vw,48px) 0 clamp(72px,9vw,96px);color:#fff;overflow:hidden}
+.cmp-hero-bg{position:absolute;inset:0;z-index:-2;background-color:#6b1038;background-size:cover;background-position:center 30%;background-repeat:no-repeat}
+/* Light at the top so the featured image is clearly visible; darkens only behind the title for readable text. */
+.cmp-hero::before{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(180deg,rgba(42,16,32,.10) 0%,rgba(42,16,32,.18) 38%,rgba(42,16,32,.55) 68%,rgba(86,14,46,.88) 100%)}
 .cmp-hero::after{content:"\0627";position:absolute;right:2%;bottom:-.3em;z-index:-1;font:700 clamp(12rem,24vw,22rem)/1 Amiri,"Times New Roman",serif;color:var(--c-gold);opacity:.1;pointer-events:none;user-select:none}
 .cmp-hero .wrap{width:100%}
-.cmp-crumbs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:clamp(20px,4vw,40px);font-size:.85rem;opacity:.9}
+.cmp-crumbs{text-shadow:0 1px 8px rgba(0,0,0,.5);display:flex;flex-wrap:wrap;gap:8px;margin-bottom:clamp(20px,4vw,40px);font-size:.85rem;opacity:.9}
 .cmp-crumbs a{color:#fff;text-decoration:underline;text-underline-offset:3px}
 .cmp-crumbs span[aria-current]{max-width:46ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cmp-caption{max-width:820px}
-.cmp-caption h1{margin:12px 0 14px;color:#fff;font:700 clamp(2.1rem,5.2vw,3.6rem)/1.08 Amiri,Georgia,serif;letter-spacing:-.01em}
+.cmp-caption h1{margin:12px 0 14px;color:#fff;text-shadow:0 2px 18px rgba(0,0,0,.45);font:700 clamp(2.1rem,5.2vw,3.6rem)/1.08 Amiri,Georgia,serif;letter-spacing:-.01em}
 .cmp-dates{display:inline-flex;align-items:center;gap:8px;margin:0;padding:7px 14px;border-radius:999px;background:rgba(255,255,255,.14);font-size:.9rem;font-weight:600}
 .cmp-dates svg{flex:0 0 auto}
 

@@ -70,6 +70,13 @@ $ownerName = trim((string) ($owner['first_name'] ?? '') . ' ' . (string) ($owner
   <?php else: ?>
     <p class="muted" style="margin:0">No cover image was uploaded. The public page will show the default picture.</p>
   <?php endif; ?>
+
+  <form method="post" action="<?= e(base_url('admin/fundraisers/' . (int) $fundraiser['id'] . '/cover')) ?>" enctype="multipart/form-data"
+        style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+    <?= csrf_field() ?>
+    <input class="input" type="file" name="cover_image" accept="image/jpeg,image/png,image/webp" required style="max-width:340px">
+    <button class="btn btn-light btn-sm" type="submit"><?= $coverPath !== '' ? 'Replace picture' : 'Upload picture' ?></button>
+  </form>
 </section>
 
 <div class="grid-2">

@@ -13,6 +13,25 @@ $currentPath = '/' . trim(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH
 $isActive = static fn (string $path): string => str_starts_with($currentPath, $path) ? 'active' : '';
 $fullName = !empty($authUser) ? trim((string) $authUser['first_name'] . ' ' . (string) $authUser['last_name']) : '';
 $headerLogoUrl = site_brand_asset('site.header_logo');
+
+// Links come from the menu assigned to "Header" in Admin → Menus; with none
+// assigned the standard links below are used.
+try {
+    $headerMenu = app(\App\Services\MenuService::class)->forLocation('header');
+} catch (\Throwable $e) {
+    $headerMenu = null;
+}
+$homePath = rtrim((string) (parse_url(base_url('/'), PHP_URL_PATH) ?: ''), '/');
+$menuActive = static function (string $path) use ($currentPath, $homePath): string {
+    $path = rtrim($path, '/');
+    if ($path === '') {
+        return '';
+    }
+    if ($path === $homePath) {
+        return rtrim($currentPath, '/') === $homePath ? 'active' : '';
+    }
+    return str_starts_with($currentPath, $path) ? 'active' : '';
+};
 ?>
 <header class="site-header" id="site-header">
   <div class="wrap">
@@ -31,10 +50,16 @@ $headerLogoUrl = site_brand_asset('site.header_logo');
     </a>
 
     <nav class="main-nav" id="main-nav" aria-label="Primary">
-      <a href="<?= e(base_url('fundraisers')) ?>" class="<?= $isActive('/fundraisers') ?>">Support a Fundraiser</a>
-      <a href="<?= e(base_url('teams')) ?>" class="<?= $isActive('/teams') ?>">Teams</a>
-      <a href="<?= e(base_url('campaigns')) ?>" class="<?= $isActive('/campaigns') ?>">Campaigns</a>
-      <a href="<?= e(base_url('about-us')) ?>" class="<?= $isActive('/about-us') ?>">About Us</a>
+      <?php if ($headerMenu !== null): ?>
+        <?php foreach ($headerMenu['items'] as $menuItem): ?>
+          <a href="<?= e($menuItem['url']) ?>" class="<?= $menuActive($menuItem['path']) ?>"<?= $menuItem['newtab'] ? ' target="_blank" rel="noopener"' : '' ?>><?= e($menuItem['label']) ?></a>
+        <?php endforeach; ?>
+      <?php else: ?>
+        <a href="<?= e(base_url('fundraisers')) ?>" class="<?= $isActive('/fundraisers') ?>">Support a Fundraiser</a>
+        <a href="<?= e(base_url('teams')) ?>" class="<?= $isActive('/teams') ?>">Teams</a>
+        <a href="<?= e(base_url('campaigns')) ?>" class="<?= $isActive('/campaigns') ?>">Campaigns</a>
+        <a href="<?= e(base_url('about-us')) ?>" class="<?= $isActive('/about-us') ?>">About Us</a>
+      <?php endif; ?>
 
       <?php /* MOBILE ONLY: same buttons as .header-cta, shown inside the opened menu. Hidden on desktop. */ ?>
       <div class="mobile-menu-cta">

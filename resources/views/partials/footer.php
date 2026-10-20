@@ -9,6 +9,26 @@ $org = (array) Config::get('app.org', []);
 $appName = (string) Config::get('app.name', 'Almarah Foundation');
 $year = date('Y');
 $footerLogoUrl = site_brand_asset('site.footer_logo');
+
+// Link columns come from the menus assigned to the footer in Admin → Menus;
+// a column with no menu keeps its standard links.
+try {
+    $menuService = app(\App\Services\MenuService::class);
+    $footerMenu1 = $menuService->forLocation('footer_1');
+    $footerMenu2 = $menuService->forLocation('footer_2');
+} catch (\Throwable $e) {
+    $footerMenu1 = $footerMenu2 = null;
+}
+$footerMenuLinks = static function (array $menu): void {
+    ?>
+        <h5><?= e($menu['title']) ?></h5>
+        <ul class="footer-links">
+          <?php foreach ($menu['items'] as $item): ?>
+            <li><a href="<?= e($item['url']) ?>"<?= $item['newtab'] ? ' target="_blank" rel="noopener"' : '' ?>><?= e($item['label']) ?></a></li>
+          <?php endforeach; ?>
+        </ul>
+    <?php
+};
 ?>
 <footer class="site-footer" id="site-footer">
   <div class="wrap">
@@ -40,6 +60,9 @@ $footerLogoUrl = site_brand_asset('site.footer_logo');
       </div>
 
       <div>
+        <?php if ($footerMenu1 !== null): ?>
+          <?php $footerMenuLinks($footerMenu1); ?>
+        <?php else: ?>
         <h5>Fundraise</h5>
         <ul class="footer-links">
           <?php if (can_fundraiser_capability('manage_pages')): ?><li><a href="<?= e(base_url('register')) ?>">Start a Fundraiser</a></li><?php endif; ?>
@@ -48,9 +71,13 @@ $footerLogoUrl = site_brand_asset('site.footer_logo');
           <li><a href="<?= e(base_url('campaigns')) ?>">Appeal Campaigns</a></li>
           <li><a href="<?= e(base_url('login')) ?>">Fundraiser Login</a></li>
         </ul>
+        <?php endif; ?>
       </div>
 
       <div>
+        <?php if ($footerMenu2 !== null): ?>
+          <?php $footerMenuLinks($footerMenu2); ?>
+        <?php else: ?>
         <h5>Our Work</h5>
         <ul class="footer-links">
           <li><a href="<?= e(base_url('campaigns')) ?>">Parent the Orphan</a></li>
@@ -59,6 +86,7 @@ $footerLogoUrl = site_brand_asset('site.footer_logo');
           <li><a href="<?= e(base_url('about-us')) ?>">Izzat ki Roti</a></li>
           <li><a href="<?= e(base_url('about-us')) ?>">Compassionate Haven</a></li>
         </ul>
+        <?php endif; ?>
       </div>
 
       <div>

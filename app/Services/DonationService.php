@@ -247,7 +247,14 @@ final class DonationService
                 'provider_transaction_id'   => $registration->providerTransactionId,
                 'provider_order_id'         => $registration->providerOrderId,
                 'provider_unique_id'        => $registration->providerUniqueId,
-                'provider_payment_page_url' => $registration->providerPaymentPageUrl,
+                // The column holds 255 characters. The donor is handed to the
+                // bank straight from the registration answer, so an unusually
+                // long address is simply not stored rather than failing the
+                // whole payment with a database error.
+                'provider_payment_page_url' => ($registration->providerPaymentPageUrl !== null
+                    && strlen((string) $registration->providerPaymentPageUrl) <= 255)
+                    ? $registration->providerPaymentPageUrl
+                    : null,
                 'provider_response_code'    => $registration->providerCode,
                 'provider_response_description' => $this->truncate($registration->providerMessage),
                 'status'                    => 'processing',

@@ -63,6 +63,37 @@ $jsonOut = static function (bool $ok, array $extra = [], int $status = 200): voi
     exit;
 };
 
+/**
+ * An unexpected failure while starting a payment: log the real reason under a
+ * short reference, and return the donor-facing message. Logged-in admins also
+ * see the technical detail so a problem can be fixed without digging through
+ * server logs; donors only ever see the reference.
+ */
+$unexpected = static function (Throwable $e, string $where) use (&$app): string {
+    $ref = strtoupper(substr(bin2hex(random_bytes(3)), 0, 6));
+    $detail = get_class($e) . ': ' . mb_substr($e->getMessage(), 0, 300)
+        . ' (' . basename($e->getFile()) . ':' . $e->getLine() . ')';
+
+    error_log('[almarah] payment start failed [' . $ref . '] ' . $where . ' - ' . $detail);
+    try {
+        $app->make(\App\Core\Logger::class)->payment('Payment start failed unexpectedly', [
+            'ref' => $ref, 'where' => $where, 'detail' => $detail,
+        ]);
+    } catch (Throwable) {
+        // logging must never break the answer
+    }
+
+    $message = 'We could not start the payment just now. Please try again, or contact our team to give another way. (Reference ' . $ref . ')';
+    try {
+        if ($app->make(\App\Services\AuthService::class)->isAdmin()) {
+            $message .= ' Admin detail: ' . $detail;
+        }
+    } catch (Throwable) {
+        // not logged in / no session: donors get the plain message
+    }
+    return $message;
+};
+
 try {
     $app = require __DIR__ . '/bootstrap/app.php';
 } catch (Throwable $bootFailure) {
@@ -205,9 +236,7 @@ try {
 } catch (PaymentGatewayException | InvalidArgumentException $e) {
     $failBack($e->getMessage(), $target, $kind);
 } catch (Throwable $e) {
-    error_log('[almarah] fundraise-submit failed: ' . $e->getMessage()
-        . ' in ' . $e->getFile() . ':' . $e->getLine());
-    $failBack('We could not start the payment just now. Please try again, or contact our team to give another way.', $target, $kind);
+    $failBack($unexpected($e, 'registration'), $target, $kind);
 }
 
 // --- hand the donor to the bank --------------------------------------------
@@ -223,8 +252,7 @@ if ($directBank) {
     try {
         $bankUrl = $gateways->gateway('etisalat')->validatePaymentPageUrl($result['payment_page']);
     } catch (Throwable $e) {
-        error_log('[almarah] fundraise-submit refused bank page: ' . $e->getMessage());
-        $failBack('We could not start the payment just now. Please try again, or contact our team to give another way.', $target, $kind);
+        $failBack($unexpected($e, 'bank page check'), $target, $kind);
     }
 }
 

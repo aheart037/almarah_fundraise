@@ -159,17 +159,32 @@
   /* ---------- Live donation summary ---------- */
   function updateSummary() {
     var input = document.querySelector("[data-amount-input]");
-    var target = document.querySelector("[data-summary-amount]");
+    var targets = document.querySelectorAll("[data-summary-amount]");
     var cover = document.querySelector("[data-cover-fees]");
     var coverRow = document.querySelector("[data-cover-fee-row]");
-    if (!input || !target) return;
+    if (!input || !targets.length) return;
 
+    // Both the "Amount" and the "Total" rows carry data-summary-amount.
     var amount = parseFloat(String(input.value).replace(/[^0-9.]/g, "")) || 0;
-    target.textContent = "Rs " + amount.toLocaleString("en-PK", { maximumFractionDigits: 0 });
+    var text = "Rs " + amount.toLocaleString("en-PK", { maximumFractionDigits: 2 });
+    targets.forEach(function (target) { target.textContent = text; });
 
     if (coverRow && cover) {
       coverRow.style.display = cover.checked ? "flex" : "none";
     }
+  }
+
+  function initChoices() {
+    var radios = document.querySelectorAll(".choice input[type=radio]");
+    if (!radios.length) return;
+    function sync() {
+      radios.forEach(function (r) {
+        var box = r.closest(".choice");
+        if (box) box.classList.toggle("active", r.checked);
+      });
+    }
+    radios.forEach(function (r) { r.addEventListener("change", sync); });
+    sync();
   }
 
   function initSummary() {
@@ -391,6 +406,7 @@
     initCounters();
     initAmounts();
     initSummary();
+    initChoices();
     initConfirms();
     initCopy();
     initShare();

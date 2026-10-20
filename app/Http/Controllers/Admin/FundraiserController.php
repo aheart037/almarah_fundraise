@@ -17,6 +17,7 @@ use App\Repositories\DonationRepository;
 use App\Repositories\FundraiserRepository;
 use App\Services\AuthService;
 use App\Services\FundraiserService;
+use App\Services\UploadService;
 use InvalidArgumentException;
 use Throwable;
 
@@ -37,7 +38,8 @@ final class FundraiserController extends Controller
         private FundraiserService $service,
         private DonationRepository $donations,
         private Database $db,
-        private Logger $logger
+        private Logger $logger,
+        private UploadService $uploads
     ) {
         parent::__construct($view, $session, $csrf, $auth);
     }
@@ -151,6 +153,46 @@ final class FundraiserController extends Controller
     public function feature(Request $request): Response
     {
         return $this->transition($request, (int) $request->routeParam('id', 0), 'feature');
+    }
+
+    /**
+     * Upload or replace the cover picture from the review page, so a page
+     * submitted without a usable picture can be fixed before it is approved.
+     */
+    public function cover(Request $request): Response
+    {
+        $fundraiser = $this->requireFundraiser((int) $request->routeParam('id', 0));
+        $id = (int) $fundraiser['id'];
+        $back = '/admin/fundraisers/' . $id;
+
+        $file = $request->file('cover_image');
+        if (!is_array($file) || (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+            $this->flashError('Choose a picture to upload first.');
+            return $this->redirect($back);
+        }
+
+        try {
+            $path = $this->uploads->storeImage($file, 'fundraisers');
+        } catch (InvalidArgumentException $e) {
+            $this->flashError($e->getMessage());
+            return $this->redirect($back);
+        }
+
+        try {
+            $this->fundraisers->update($id, ['cover_image_path' => $path]);
+        } catch (Throwable $e) {
+            $this->uploads->delete($path);
+            $this->logger->error('Admin cover image save failed', ['fundraiser' => $id, 'error' => $e->getMessage()]);
+            $this->flashError('The picture could not be saved. Please try again.');
+            return $this->redirect($back);
+        }
+
+        // The old picture is only removed once the new one is safely saved.
+        $this->uploads->delete((string) ($fundraiser['cover_image_path'] ?? ''));
+
+        $this->logger->info('Admin replaced fundraiser cover image', ['fundraiser' => $id, 'admin' => (int) $this->auth->id()]);
+        $this->flashSuccess('Cover picture updated.');
+        return $this->redirect($back);
     }
 
     public function hideUpdate(Request $request): Response

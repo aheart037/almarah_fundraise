@@ -15,6 +15,10 @@ return [
      */
     'gateways' => [
         'meezan' => [
+            // What donors see in the payment-method chooser.
+            'checkout_label'       => 'Credit/Debit Card - Meezan Bank',
+            'checkout_description' => 'Secure Payment with Credit/Debit Card',
+            'checkout_logo'        => 'https://almarah.org/wp-content/uploads/2026/04/meezan-logo.png',
             'label'       => 'Meezan Bank',
             'description' => 'Meezan Bank hosted payment page (register.do / getOrderStatus.do).',
             'enabled'     => (bool) Env::get('MEEZAN_ENABLED', false),
@@ -41,6 +45,10 @@ return [
         ],
 
         'etisalat' => [
+            // What donors see in the payment-method chooser.
+            'checkout_label'       => 'Credit/Debit Card - UBL',
+            'checkout_description' => 'Secure Payment with Credit/Debit Card',
+            'checkout_logo'        => 'https://almarah.org/wp-content/uploads/2026/04/UBL-Pay-Visa-Mastercard-logo-scaled-1.gif',
             'label'       => 'Etisalat / UBL EPG',
             'description' => 'Etisalat (UBL EPG) hosted card processing via Registration + Finalization.',
             'enabled'     => (bool) Env::get('ETISALAT_ENABLED', false),

@@ -131,6 +131,9 @@ $returnUrl = base_url('donate/' . $targetSlug) . ($targetType !== 'fundraiser' ?
                   <label class="choice <?= $index === 0 ? 'active' : '' ?>">
                     <input type="radio" name="gateway" value="<?= e((string) $gateway['code']) ?>" <?= $index === 0 ? 'checked' : '' ?> required>
                     <span>
+                      <?php if (!empty($gateway['logo'])): ?>
+                        <img class="choice-logo" src="<?= e((string) $gateway['logo']) ?>" alt="<?= e((string) $gateway['label']) ?>" loading="lazy" height="32">
+                      <?php endif; ?>
                       <b><?= e((string) $gateway['label']) ?></b>
                       <em><?= e((string) ($gateway['description'] ?: 'Debit or credit card, verified by your bank')) ?></em>
                     </span>

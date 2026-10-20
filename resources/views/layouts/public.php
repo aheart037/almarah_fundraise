@@ -34,6 +34,7 @@ $isAuthPage = preg_match('~/(?:login|register|forgot-password|reset-password|ver
 <meta property="og:description" content="<?= e($description) ?>">
 <meta property="og:type" content="website">
 <link rel="stylesheet" href="<?= e(asset('assets/css/style.css')) ?>">
+<?php require __DIR__ . '/../partials/typography.php'; ?>
 <?php require __DIR__ . '/../partials/favicon.php'; ?>
 </head>
 <body<?= $isAuthPage ? ' class="auth-page-body"' : '' ?>>
@@ -48,11 +49,17 @@ $isAuthPage = preg_match('~/(?:login|register|forgot-password|reset-password|ver
 <?php require __DIR__ . '/../partials/footer.php'; ?>
 
 <div class="mobile-panel" id="mobilePanel">
+  <?php if (!empty($headerMenu)): ?>
+    <?php foreach ($headerMenu['items'] as $menuItem): ?>
+      <a class="m-link" href="<?= e($menuItem['url']) ?>"<?= $menuItem['newtab'] ? ' target="_blank" rel="noopener"' : '' ?>><?= e($menuItem['label']) ?></a>
+    <?php endforeach; ?>
+  <?php else: ?>
   <a class="m-link" href="<?= e(base_url('fundraisers')) ?>">Browse fundraisers</a>
   <a class="m-link" href="<?= e(base_url('teams')) ?>">Teams</a>
   <a class="m-link" href="<?= e(base_url('campaigns')) ?>">Campaigns</a>
   <a class="m-link" href="<?= e(base_url('about-us')) ?>">About us</a>
   <a class="m-link" href="<?= e(base_url('faq')) ?>">FAQ</a>
+  <?php endif; ?>
   <?php if (!empty($authUser)): ?>
     <a class="m-link" href="<?= e(base_url('dashboard')) ?>">Dashboard</a>
     <a class="m-link" href="<?= e(base_url('logout')) ?>" data-method="post">Sign out</a>

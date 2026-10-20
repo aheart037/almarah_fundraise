@@ -25,6 +25,7 @@ $canManageTeams = can_fundraiser_capability('manage_teams');
 <meta name="robots" content="noindex,nofollow">
 <meta name="csrf-token" content="<?= e(csrf_token()) ?>">
 <link rel="stylesheet" href="<?= e(asset('assets/css/style.css')) ?>">
+<?php require __DIR__ . '/../partials/typography.php'; ?>
 <?php require __DIR__ . '/../partials/favicon.php'; ?>
 </head>
 <body class="dash-body">
