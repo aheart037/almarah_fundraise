@@ -16,6 +16,9 @@ return [
     'reply_to'    => Env::get('MAIL_REPLY_TO', 'info@almarah.org'),
     'verify_peer' => (bool) Env::get('MAIL_VERIFY_PEER', true),
     'debug'       => (bool) Env::get('MAIL_DEBUG', false),
+    // Seconds to wait for the mail server when connecting and for each reply.
+    // Without a limit an unreachable server can hold a web worker for minutes.
+    'timeout'     => (int) Env::get('SMTP_TIMEOUT', 10),
     'queue'       => [
         'enabled'     => (bool) Env::get('MAIL_QUEUE_ENABLED', true),
         'max_retries' => (int) Env::get('MAIL_MAX_RETRIES', 3),

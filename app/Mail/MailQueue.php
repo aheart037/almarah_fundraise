@@ -82,9 +82,11 @@ final class MailQueue
 
         $id = $this->db->insert('email_jobs', $job);
 
-        // When the queue is disabled the message is sent immediately so that a
-        // small deployment still delivers transactional mail.
-        if (!$this->queueEnabled()) {
+        // With the queue switched off the message is sent right away. From the
+        // command line that is done here. On the website it is done after the
+        // page has been delivered (see scheduleDelivery), so a slow mail server
+        // can never make a visitor wait.
+        if (!$this->queueEnabled() && PHP_SAPI === 'cli') {
             $this->processJob($id);
         } else {
             $this->scheduleDelivery();
@@ -148,10 +150,17 @@ final class MailQueue
      * Send queued mail right after this web request has been answered, so
      * receipts and notices go out even when no cron job runs `mail:work`.
      *
-     * The visitor's page is never delayed: the response is finished first.
+     * This runs inside a web worker, so it is deliberately cautious:
+     *  - the visitor's page is finished first (when the server lets us);
+     *  - only one such sender runs at a time (a lock file), so a burst of
+     *    visitors cannot pile up SMTP connections;
+     *  - it gives up for 90 seconds after a failure, so a down mail server is
+     *    not retried by every page view;
+     *  - it handles at most 3 emails, stops at the first failure and keeps to
+     *    a short time budget, and SMTP itself has a connect/reply timeout.
+     *
      * Jobs are claimed atomically, so this and a cron worker can never send
-     * the same email twice. A cron worker is still recommended as a backup
-     * for retries.
+     * the same email twice. A cron worker is still recommended for retries.
      */
     private function scheduleDelivery(): void
     {
@@ -161,16 +170,32 @@ final class MailQueue
         $this->drainScheduled = true;
 
         register_shutdown_function(function (): void {
+            $lock = null;
+            $started = microtime(true);
             try {
                 // Let the visitor's browser have the finished page first.
+                $detached = false;
                 if (function_exists('fastcgi_finish_request')) {
-                    @fastcgi_finish_request();
+                    $detached = (bool) @fastcgi_finish_request();
                 } elseif (function_exists('litespeed_finish_request')) {
                     @litespeed_finish_request();
+                    $detached = true;
+                }
+
+                // Back off while the mail server is failing.
+                $state = $this->stateFile('mail-backoff');
+                if (is_file($state) && (time() - (int) @filemtime($state)) < 90) {
+                    return;
+                }
+
+                // One background sender at a time.
+                $lock = @fopen($this->stateFile('mail-drain.lock'), 'c');
+                if ($lock === false || !flock($lock, LOCK_EX | LOCK_NB)) {
+                    return;
                 }
 
                 ignore_user_abort(true);
-                @set_time_limit(90);
+                @set_time_limit(40);
 
                 // Do not hold the visitor's session lock while talking to SMTP.
                 if (session_status() === PHP_SESSION_ACTIVE) {
@@ -178,11 +203,44 @@ final class MailQueue
                 }
 
                 $this->recoverStuck(15);
-                $this->work(10);
+
+                // If the server could not detach us from the visitor's page the
+                // visitor is still waiting, so do much less.
+                $stats = $detached
+                    ? $this->work(3, $started + 20.0, true)
+                    : $this->work(1, $started + 8.0, true);
+
+                if ($stats['failed'] > 0) {
+                    @touch($state);
+                } elseif ($stats['sent'] > 0 && is_file($state)) {
+                    @unlink($state);
+                }
+
+                if ($stats['sent'] + $stats['failed'] > 0) {
+                    $this->logger->info('Background mail delivery', $stats + [
+                        'seconds'  => round(microtime(true) - $started, 1),
+                        'detached' => $detached,
+                    ]);
+                }
             } catch (Throwable $e) {
                 error_log('[almarah] background mail delivery failed: ' . $e->getMessage());
+            } finally {
+                if (is_resource($lock)) {
+                    @flock($lock, LOCK_UN);
+                    @fclose($lock);
+                }
             }
         });
+    }
+
+    /** A small file for coordination between requests, in storage/cache. */
+    private function stateFile(string $name): string
+    {
+        $dir = rtrim(app()->basePath(), '/\\') . '/storage/cache';
+        if (!is_dir($dir) || !is_writable($dir)) {
+            $dir = sys_get_temp_dir();
+        }
+        return $dir . '/' . $name;
     }
 
     public function queueEnabled(): bool
@@ -220,16 +278,40 @@ final class MailQueue
     }
 
     /** @return array{sent:int, failed:int, skipped:int} */
-    public function work(int $limit = 25): array
+    public function work(int $limit = 25, ?float $deadline = null, bool $stopOnFailure = false): array
     {
         $stats = ['sent' => 0, 'failed' => 0, 'skipped' => 0];
 
-        foreach ($this->claimBatch($limit) as $job) {
+        $jobs = $this->claimBatch($limit);
+        foreach ($jobs as $i => $job) {
+            // Out of time, or the mail server just failed: hand the rest back
+            // to the queue untouched for the next attempt (or the cron worker).
+            if (($deadline !== null && microtime(true) >= $deadline) || ($stopOnFailure && $stats['failed'] > 0)) {
+                $this->release(array_slice($jobs, $i));
+                break;
+            }
+
             $result = $this->deliver($job);
             $stats[$result]++;
         }
 
         return $stats;
+    }
+
+    /**
+     * Put claimed-but-unsent jobs back in the queue without counting an attempt.
+     *
+     * @param array<int,array<string,mixed>> $jobs
+     */
+    private function release(array $jobs): void
+    {
+        foreach ($jobs as $job) {
+            $this->db->run(
+                "UPDATE email_jobs SET status = 'queued', attempts = GREATEST(attempts - 1, 0), updated_at = UTC_TIMESTAMP()
+                 WHERE id = :id AND status = 'sending'",
+                ['id' => $job['id']]
+            );
+        }
     }
 
     /** @param array<string,mixed> $job */

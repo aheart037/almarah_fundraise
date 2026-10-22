@@ -29,6 +29,14 @@ final class SmtpTransport implements TransportInterface
         $mailer->SMTPAuth   = (string) ($this->config['username'] ?? '') !== '';
         $mailer->Username   = (string) ($this->config['username'] ?? '');
         $mailer->Password   = (string) ($this->config['password'] ?? '');
+        // PHPMailer waits 300 seconds by default, in three separate places
+        // (connecting, each read, and the overall wait for a reply). A slow or
+        // unreachable mail server must never tie up a web worker for that long.
+        $timeout = max(3, min(30, (int) ($this->config['timeout'] ?? 10)));
+        $mailer->Timeout = $timeout;
+        $smtp = $mailer->getSMTPInstance();
+        $smtp->Timeout   = $timeout;
+        $smtp->Timelimit = $timeout;
         $mailer->CharSet    = 'UTF-8';
         $mailer->Encoding   = 'base64';
         $mailer->XMailer    = 'Almarah Foundation';
