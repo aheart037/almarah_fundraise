@@ -19,6 +19,6 @@ $greeting = $name !== '' ? 'Dear ' . $name . ',' : 'Hello,';
     'Post an update with a photo and a specific number — "Rs 40,000 to go".',
     'Message your most engaged supporters directly; they are the ones who share.',
     'Ask your team members to do the same from their own pages.',
-]) ?>
+], 'Finish strong') ?>
 <?= email_button((string) ($cta_label ?? 'Post an update'), (string) ($cta_url ?? '')) ?>
 <?= email_signoff($orgName) ?>

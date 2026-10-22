@@ -34,8 +34,8 @@ return [
         'founded'    => '2021-06-04',
         'website'    => 'https://www.almarah.org',
         'email'      => 'info@almarah.org',
-        'phone'      => 'UAN: (042) 111 111 130',
-        'address'    => '3 Canal Park, Gulberg-II, Lahore, Pakistan',
+        'phone'      => '+92 42 111 262 272',
+        'address'    => 'Canal Road, Lahore, Punjab, Pakistan',
         'hours'      => 'Monday to Saturday, 9:00am – 6:00pm (PKT)',
         // Bank-transfer details shown on a failed-payment page, same as the
         // Qurbani site, so a donor whose card failed can still give.

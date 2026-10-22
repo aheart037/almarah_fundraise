@@ -15,7 +15,7 @@ $greeting = $name !== '' ? 'Dear ' . $name . ',' : 'Hello,';
     'Build your page: add a title, a photo and the story of why this cause matters to you.',
     'Set a goal and a date — a clear target raises more than an open-ended page.',
     'Share the link with family, friends and colleagues, then post updates as you go.',
-]) ?>
+], 'Getting started') ?>
 <?= email_button((string) ($cta_label ?? 'Open your dashboard'), (string) ($cta_url ?? '')) ?>
 <?= email_fallback_url((string) ($cta_url ?? '')) ?>
 <?= email_note('Almarah Foundation never asks for your password, card details or one-time codes by email.') ?>

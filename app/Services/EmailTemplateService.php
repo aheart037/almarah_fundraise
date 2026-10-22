@@ -15,6 +15,14 @@ use App\Core\View;
  */
 final class EmailTemplateService
 {
+    /**
+     * Bumped whenever the shipped email design changes. Stored templates keep
+     * the design they were created with, so Admin → Email templates compares
+     * this with the version last applied and offers a one-click refresh.
+     */
+    public const DESIGN_VERSION = '2';
+    public const DESIGN_VERSION_SETTING = 'email.design_version';
+
     public function __construct(private Database $db, private View $view)
     {
     }
@@ -187,6 +195,12 @@ final class EmailTemplateService
         }
 
         return implode("\n", array_filter($lines, static fn ($l): bool => $l !== null));
+    }
+
+    /** Does this event have its own shipped design (not just the generic fallback)? */
+    public function hasShippedDesign(string $eventKey): bool
+    {
+        return $this->view->exists('emails.' . $this->viewName($eventKey));
     }
 
     private function viewName(string $eventKey): string

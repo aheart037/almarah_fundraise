@@ -10,13 +10,15 @@ $body     = (string) ($body ?? '');
 $greeting = $name !== '' ? 'Dear ' . $name . ',' : 'Hello,';
 ?>
 <?= email_heading($heading, 'Refund processed') ?>
+<?= email_status((string) ($status ?? 'Refunded'), 'neutral') ?>
 <?= email_paragraph($greeting . ' ' . $body) ?>
+<?= email_amount('Refund amount', (string) ($amount ?? '')) ?>
 <?= email_rows([
     'Reference'      => (string) ($reference ?? ''),
     'Amount'         => (string) ($amount ?? ''),
     'Payment method' => (string) ($gateway ?? ''),
     'Status'         => (string) ($status ?? 'Refunded'),
-]) ?>
+], 'Refund details') ?>
 <?= email_button((string) ($cta_label ?? ''), (string) ($cta_url ?? '')) ?>
 <?= email_note('Refunds are returned to the same card, wallet or account that was used for the donation. Banks typically take five to ten working days to show the credit.', 'warning') ?>
 <?= email_paragraph('If the refund has not appeared after ten working days, reply to this email with the reference and we will chase it with the bank.') ?>

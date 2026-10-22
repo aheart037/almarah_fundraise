@@ -42,6 +42,7 @@ final class EmailController extends Controller
             'pageTitle' => 'Email templates',
             'templates' => $this->templates->all(),
             'mailConfigured' => $this->settings->mailConfigured(),
+            'designCurrent' => (string) ($this->settings->get(EmailTemplateService::DESIGN_VERSION_SETTING, '') ?? '') === EmailTemplateService::DESIGN_VERSION,
         ], 'layouts/admin');
     }
 
@@ -100,6 +101,69 @@ final class EmailController extends Controller
 
         $this->flashSuccess('Template saved. New emails will use this version.');
         return $this->redirect('/admin/email-templates/' . $id);
+    }
+
+    /**
+     * Brings every saved email up to the current shipped design in one go.
+     *
+     * Only the HTML body is replaced: subjects, plain-text versions, names and
+     * the enabled/disabled state are left exactly as they are, and every
+     * {{token}} keeps working because the new design is rendered with the same
+     * tokens. Each old body is kept in the settings table first, so nothing is
+     * lost if an email had been customised.
+     */
+    public function applyDesign(Request $request): Response
+    {
+        $userId = (int) $this->auth->id();
+        $updated = 0;
+        $current = 0;
+        $skipped = 0;
+
+        try {
+            foreach ($this->templates->all() as $row) {
+                $event = (string) $row['event_key'];
+                $id = (int) $row['id'];
+
+                // Custom events without a shipped design would only get the
+                // generic fallback; leave those alone.
+                if (!$this->templates->hasShippedDesign($event)) {
+                    $skipped++;
+                    continue;
+                }
+
+                $full = $this->templates->find($id);
+                if ($full === null) {
+                    continue;
+                }
+
+                $rendered = $this->templates->renderDefaults($event, $this->templates->defaultPlaceholderData());
+                if (trim((string) $full['html_body']) === trim($rendered['html'])) {
+                    $current++;
+                    continue;
+                }
+
+                $this->settings->set('email.backup.' . $event, (string) $full['html_body'], false, $userId);
+                $this->db->update('email_templates', [
+                    'html_body'  => $rendered['html'],
+                    'updated_by' => $userId,
+                ], 'id = :id', ['id' => $id]);
+                $updated++;
+            }
+
+            $this->settings->set(EmailTemplateService::DESIGN_VERSION_SETTING, EmailTemplateService::DESIGN_VERSION, false, $userId);
+            $this->audit->log('email.design_applied', 'email_template', 'all', ['updated' => $updated], $userId);
+        } catch (\Throwable $e) {
+            error_log('[almarah] email design refresh failed: ' . $e->getMessage());
+            $this->flashError('The new design could not be applied to every email. Please try again.');
+            return $this->redirect('/admin/email-templates');
+        }
+
+        $this->flashSuccess(
+            $updated > 0
+                ? 'The new design is now applied to ' . $updated . ' email' . ($updated === 1 ? '' : 's') . '. Subjects and plain-text versions were left untouched.'
+                : 'Every email already uses the current design.'
+        );
+        return $this->redirect('/admin/email-templates');
     }
 
     /**

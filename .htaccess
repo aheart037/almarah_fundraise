@@ -81,10 +81,3 @@ Options -Indexes
 # setting them in both places sends each header twice, which some security
 # scanners report as a misconfiguration. Static files that never reach PHP
 # (images, CSS, JS) do not need them; the uploads directory sets its own.
-
-# php -- BEGIN cPanel-generated handler, do not edit
-# Set the “ea-php83” package as the default “PHP” programming language.
-<IfModule mime_module>
-  AddHandler application/x-httpd-ea-php83 .php .php8 .phtml
-</IfModule>
-# php -- END cPanel-generated handler, do not edit

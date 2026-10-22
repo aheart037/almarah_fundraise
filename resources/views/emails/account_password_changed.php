@@ -15,6 +15,6 @@ $greeting = $name !== '' ? 'Dear ' . $name . ',' : 'Hello,';
     'All other signed-in sessions are still active — sign out of them from Account security if you are unsure.',
     'Choose a password you do not use anywhere else, and store it in a password manager.',
     'Check your account activity for anything you do not recognise.',
-]) ?>
+], 'Keeping your account safe') ?>
 <?= email_button((string) ($cta_label ?? 'Contact support'), (string) ($cta_url ?? '')) ?>
 <?= email_signoff($orgName) ?>

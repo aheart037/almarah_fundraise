@@ -169,9 +169,11 @@ final class EmailTemplateSeeder
         ];
 
         $count = 0;
+        $existing = 0;
         foreach ($templates as $eventKey => $template) {
             $exists = $this->db->int('SELECT COUNT(*) FROM email_templates WHERE event_key = :k', ['k' => $eventKey]);
             if ($exists > 0) {
+                $existing++;
                 continue;
             }
 
@@ -189,6 +191,21 @@ final class EmailTemplateSeeder
                 'enabled'   => 1,
             ]);
             $count++;
+        }
+
+        // A brand-new set of templates was rendered from the current design, so
+        // the admin page need not offer a refresh.
+        if ($count > 0 && $existing === 0) {
+            try {
+                app(\App\Services\SettingsService::class)->set(
+                    EmailTemplateService::DESIGN_VERSION_SETTING,
+                    EmailTemplateService::DESIGN_VERSION,
+                    false,
+                    null
+                );
+            } catch (\Throwable $e) {
+                // purely informational; never block seeding
+            }
         }
 
         return $count;

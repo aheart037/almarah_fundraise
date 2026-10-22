@@ -19,6 +19,6 @@ $greeting = $name !== '' ? 'Dear ' . $name . ',' : 'Hello,';
     'Make the change in your fundraiser page.',
     'Send it back for review — you will not lose your draft or any donations already collected.',
     'Reply to this email if anything in the request is unclear.',
-]) ?>
+], 'What happens next') ?>
 <?= email_button((string) ($cta_label ?? 'Edit your fundraiser'), (string) ($cta_url ?? '')) ?>
 <?= email_signoff($orgName) ?>

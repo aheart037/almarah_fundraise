@@ -19,6 +19,6 @@ $greeting = $name !== '' ? 'Dear ' . $name . ',' : 'Hello,';
     'Welcome them with a short message and a link to their page.',
     'Agree who is asking which part of your network, so you are not asking the same people twice.',
     'Cheer each other on publicly — teams that compare progress weekly raise more.',
-]) ?>
+], 'Welcoming your new member') ?>
 <?= email_button((string) ($cta_label ?? 'Manage your team'), (string) ($cta_url ?? '')) ?>
 <?= email_signoff($orgName) ?>

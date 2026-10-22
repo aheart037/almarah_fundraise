@@ -10,7 +10,9 @@ $body     = (string) ($body ?? '');
 $greeting = $name !== '' ? 'Dear ' . $name . ',' : 'Hello,';
 ?>
 <?= email_heading($heading, 'Official receipt') ?>
+<?= email_status((string) ($status ?? 'Completed'), 'success') ?>
 <?= email_paragraph($greeting . ' ' . $body) ?>
+<?= email_amount('Your donation amount', (string) ($amount ?? '')) ?>
 <?= email_rows([
     'Receipt number' => (string) ($reference ?? ''),
     'Date'           => (string) ($receipt_date ?? gmdate('j F Y')),
@@ -19,8 +21,9 @@ $greeting = $name !== '' ? 'Dear ' . $name . ',' : 'Hello,';
     'Payment method' => (string) ($gateway ?? ''),
     'Status'         => (string) ($status ?? 'Completed'),
     'Designated to'  => (string) ($fundraiser_title ?? ''),
-]) ?>
+], 'Donation details') ?>
 <?= email_note('This email is your receipt. Please keep it for your records — Almarah Foundation can reissue it from our records if it is misplaced.') ?>
 <?= email_button((string) ($cta_label ?? 'View the fundraiser'), (string) ($cta_url ?? '')) ?>
 <?= email_paragraph('Every rupee given here is spent on the programme your fundraiser supports. If you would like to see how these funds were used, reply to this email and we will send you the latest report.') ?>
+<?= email_quote('Thank you for being part of our mission.', 'Your generosity brings hope and relief to those who need it most.') ?>
 <?= email_signoff($orgName, 'Thank you for your generosity,') ?>

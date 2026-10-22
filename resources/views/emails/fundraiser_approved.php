@@ -21,5 +21,5 @@ $greeting = $name !== '' ? 'Dear ' . $name . ',' : 'Hello,';
     'Share the link by WhatsApp first — it raises the most for most fundraisers.',
     'Ask five people personally rather than posting to a large group.',
     'Post an update every week or two so supporters can see what their money is doing.',
-]) ?>
+], 'Ways to raise more') ?>
 <?= email_signoff($orgName) ?>

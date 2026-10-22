@@ -4,6 +4,7 @@
  *
  * @var array $templates
  * @var bool $mailConfigured
+ * @var bool $designCurrent  every saved email was brought up to the shipped design
  */
 ?>
 <div class="dash-head">
@@ -26,6 +27,25 @@
     </div>
   </div>
 <?php endif; ?>
+
+<section class="panel">
+  <h2 style="margin-top:0">Email design</h2>
+  <?php if (!$designCurrent): ?>
+    <p>Your saved emails still use the <b>previous design</b>. Apply the new design (wine header, gold accents, amount card and footer with both offices) to all of them in one step.</p>
+  <?php else: ?>
+    <p class="muted">Your emails use the current design. You can apply it again at any time, for example after changing the office details in <span class="mono">config/app.php</span>.</p>
+  <?php endif; ?>
+  <p class="muted" style="font-size:13px;margin-top:0">
+    Only the look of each email is replaced. Subjects, plain-text versions and the on/off switch are kept, every
+    <span class="mono">{{token}}</span> keeps working, and a copy of each old body is stored first. If you edited the wording of an
+    email's HTML yourself, that edit is replaced by the standard wording.
+  </p>
+  <form method="post" action="<?= e(base_url('admin/email-templates/apply-design')) ?>"
+        data-confirm="Apply the new design to all saved emails? A copy of each current version is kept.">
+    <?= csrf_field() ?>
+    <button class="btn <?= $designCurrent ? 'btn-light' : 'btn-brand' ?>" type="submit">Apply the new design to all emails</button>
+  </form>
+</section>
 
 <section class="panel">
   <div class="table-wrap">

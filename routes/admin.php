@@ -92,6 +92,7 @@ return static function (Router $router) use ($admin, $adminCsrf, $superCsrf): vo
 
     // --- email --------------------------------------------------------------
     $router->get('/admin/email-templates', [EmailController::class, 'templates'], $admin, 'admin.email.templates');
+    $router->post('/admin/email-templates/apply-design', [EmailController::class, 'applyDesign'], $adminCsrf, 'admin.email.templates.design');
     $router->get('/admin/email-templates/{id}', [EmailController::class, 'editTemplate'], $admin, 'admin.email.templates.edit');
     $router->post('/admin/email-templates/{id}', [EmailController::class, 'saveTemplate'], $adminCsrf, 'admin.email.templates.update');
     $router->post('/admin/email-templates/{id}/reset', [EmailController::class, 'resetTemplate'], $adminCsrf, 'admin.email.templates.reset');

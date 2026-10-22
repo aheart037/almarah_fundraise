@@ -20,6 +20,6 @@ $greeting = $name !== '' ? 'Dear ' . $name . ',' : 'Hello,';
     'Review usually takes less than two working days.',
     'You will receive an email the moment your page goes live, with a link to share.',
     'In the meantime you can keep editing the page — changes are saved on your draft.',
-]) ?>
+], 'What happens next') ?>
 <?= email_button((string) ($cta_label ?? 'View your fundraiser'), (string) ($cta_url ?? '')) ?>
 <?= email_signoff($orgName, 'Thank you,') ?>

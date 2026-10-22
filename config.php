@@ -19,13 +19,13 @@
 return [
 
     // 1. Database name      e.g. 'almarf1_almarah_platform'
-    'db_name' => 'almaraho_fundraise_alma',
+    'db_name' => '****',
 
     // 2. Database username  e.g. 'almarf1_almarah'
-    'db_user' => 'almaraho_fundraise',
+    'db_user' => '*****',
 
     // 3. Database password  the one you set in cPanel > MySQL Databases
-    'db_pass' => 'Fundraise@123',
+    'db_pass' => '*****',
 
 
     /* ------------------------------------------------------------------------
@@ -44,7 +44,7 @@ return [
     // used in emails and it is where the bank sends donors back to after a
     // payment. If you leave it empty the site works out its own address from
     // the browser, which is fine while you are setting things up.
-    'site_url' => 'https://fundraise.almarah.org',
+    'site_url' => 'https://softex.pk/donate',
 
     // LEAVE THIS EMPTY.
     //

@@ -10,14 +10,17 @@ $body     = (string) ($body ?? '');
 $greeting = $name !== '' ? 'Dear ' . $name . ',' : 'Hello,';
 ?>
 <?= email_heading($heading, 'In progress') ?>
+<?= email_status((string) ($status ?? 'Processing'), 'warning') ?>
 <?= email_paragraph($greeting . ' ' . $body) ?>
+<?= email_amount('Your donation amount', (string) ($amount ?? '')) ?>
 <?= email_rows([
     'Reference'      => (string) ($reference ?? ''),
     'Amount'         => (string) ($amount ?? ''),
     'Payment method' => (string) ($gateway ?? ''),
     'Status'         => (string) ($status ?? 'Processing'),
-]) ?>
+], 'Donation details') ?>
 <?= email_button((string) ($cta_label ?? ''), (string) ($cta_url ?? '')) ?>
 <?= email_note('No money will be treated as received until the payment provider confirms it. If the payment does not complete, any amount on hold is released by your bank on its own schedule.', 'warning') ?>
 <?= email_paragraph('You will receive one more email when the payment is either confirmed or declined. You do not need to give again.') ?>
+<?= email_quote('Thank you for being part of our mission.', 'Your generosity brings hope and relief to those who need it most.') ?>
 <?= email_signoff($orgName) ?>
