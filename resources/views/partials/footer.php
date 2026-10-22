@@ -9,26 +9,6 @@ $org = (array) Config::get('app.org', []);
 $appName = (string) Config::get('app.name', 'Almarah Foundation');
 $year = date('Y');
 $footerLogoUrl = site_brand_asset('site.footer_logo');
-
-// Link columns come from the menus assigned to the footer in Admin → Menus;
-// a column with no menu keeps its standard links.
-try {
-    $menuService = app(\App\Services\MenuService::class);
-    $footerMenu1 = $menuService->forLocation('footer_1');
-    $footerMenu2 = $menuService->forLocation('footer_2');
-} catch (\Throwable $e) {
-    $footerMenu1 = $footerMenu2 = null;
-}
-$footerMenuLinks = static function (array $menu): void {
-    ?>
-        <h5><?= e($menu['title']) ?></h5>
-        <ul class="footer-links">
-          <?php foreach ($menu['items'] as $item): ?>
-            <li><a href="<?= e($item['url']) ?>"<?= $item['newtab'] ? ' target="_blank" rel="noopener"' : '' ?>><?= e($item['label']) ?></a></li>
-          <?php endforeach; ?>
-        </ul>
-    <?php
-};
 ?>
 <footer class="site-footer" id="site-footer">
   <div class="wrap">
@@ -47,22 +27,28 @@ $footerMenuLinks = static function (array $menu): void {
         </a>
         <p><?= e((string) ($org['footer_note'] ?? ($appName . ' has been walking alongside orphaned and vulnerable children since ' . ($org['founded'] ?? '2021') . '. A safe home, a full plate, a place in school — and the dignity to dream bigger.'))) ?></p>
         <div class="socials">
-          <a href="https://www.almarah.org" target="_blank" rel="noopener" aria-label="Facebook">
+          <a href="https://www.facebook.com/almarahfoundation" target="_blank" rel="noopener" aria-label="Facebook">
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M22 12a10 10 0 1 0-11.6 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.9 3.8-3.9 1.1 0 2.2.2 2.2.2v2.5h-1.3c-1.2 0-1.6.8-1.6 1.6V12h2.8l-.4 2.9h-2.4v7A10 10 0 0 0 22 12z"/></svg>
           </a>
-          <a href="https://www.almarah.org" target="_blank" rel="noopener" aria-label="Instagram">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1.2" fill="currentColor"/></svg>
+          <a href="https://www.instagram.com/almarahfoundation" target="_blank" rel="noopener" aria-label="Instagram">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
           </a>
-          <a href="https://www.almarah.org" target="_blank" rel="noopener" aria-label="WhatsApp">
+          <a href="https://www.youtube.com/@almarahfoundation" target="_blank" rel="noopener" aria-label="YouTube">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+          </a>
+          <a href="https://www.linkedin.com/company/almarahfoundation/home/" target="_blank" rel="noopener" aria-label="LinkedIn">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.063 2.063 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+          </a>
+          <a href="https://www.tiktok.com/@almarahfoundation1" target="_blank" rel="noopener" aria-label="TikTok">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.06z"/></svg>
+          </a>
+          <a href="https://wa.me/923268050116?text=Assalam%20o%20Alaikum%2C%20I%20would%20like%20to%20get%20in%20touch%20with%20Almarah%20Foundation." target="_blank" rel="noopener" aria-label="WhatsApp">
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15L2 22l5.2-1.4A10 10 0 1 0 12 2zm5.8 14.2c-.2.7-1.4 1.3-2 1.4-.5.1-1.1.1-1.8-.1-.4-.1-1-.3-1.7-.6a11 11 0 0 1-4.2-3.7c-.3-.5-.7-1.2-.7-2s.3-1.4.5-1.6c.2-.3.5-.3.6-.3h.5c.2 0 .4 0 .5.4l.7 1.6c.1.2 0 .4-.1.5l-.3.4c-.1.1-.2.3-.1.5.2.5.6 1 1 1.4.5.5 1.1.9 1.7 1.2.2.1.4.1.5 0l.6-.7c.2-.2.3-.2.5-.1l1.6.7c.2.1.4.2.4.3.1.2.1.7-.1 1.3z"/></svg>
           </a>
         </div>
       </div>
 
       <div>
-        <?php if ($footerMenu1 !== null): ?>
-          <?php $footerMenuLinks($footerMenu1); ?>
-        <?php else: ?>
         <h5>Fundraise</h5>
         <ul class="footer-links">
           <?php if (can_fundraiser_capability('manage_pages')): ?><li><a href="<?= e(base_url('register')) ?>">Start a Fundraiser</a></li><?php endif; ?>
@@ -71,13 +57,9 @@ $footerMenuLinks = static function (array $menu): void {
           <li><a href="<?= e(base_url('campaigns')) ?>">Appeal Campaigns</a></li>
           <li><a href="<?= e(base_url('login')) ?>">Fundraiser Login</a></li>
         </ul>
-        <?php endif; ?>
       </div>
 
       <div>
-        <?php if ($footerMenu2 !== null): ?>
-          <?php $footerMenuLinks($footerMenu2); ?>
-        <?php else: ?>
         <h5>Our Work</h5>
         <ul class="footer-links">
           <li><a href="<?= e(base_url('campaigns')) ?>">Parent the Orphan</a></li>
@@ -86,7 +68,6 @@ $footerMenuLinks = static function (array $menu): void {
           <li><a href="<?= e(base_url('about-us')) ?>">Izzat ki Roti</a></li>
           <li><a href="<?= e(base_url('about-us')) ?>">Compassionate Haven</a></li>
         </ul>
-        <?php endif; ?>
       </div>
 
       <div>

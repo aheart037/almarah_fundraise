@@ -135,42 +135,99 @@ $trustPoints = array_values(array_filter(
     </section>
   <?php endif; ?>
 
-  <!-- ============ HOW IT WORKS ============ -->
-  <section class="home-section home-how" id="how" aria-labelledby="home-how-title">
-    <div class="wrap">
-      <div class="home-section-heading home-section-heading--center">
+<!-- ============ HOW IT WORKS (4-IMAGE REDESIGN) ============ -->
+<section class="howr-section" id="how" aria-labelledby="home-how-title">
+  <div class="howr-wrap">
+    <div class="howr-layout">
+
+      <!-- ═══════════════════════════════════════
+           LEFT — CONTENT
+      ═══════════════════════════════════════ -->
+      <div class="howr-content">
         <span class="home-kicker">A simple way to make a difference</span>
-        <h2 id="home-how-title">Your idea can become real support.</h2>
-        <p>You do not need to be a professional fundraiser. Start with a reason, then invite the people who care about the same things you do.</p>
+        <h2 id="home-how-title" class="howr-title">
+          Your idea can become <em>real support.</em>
+        </h2>
+        <p class="howr-lead">
+          You do not need to be a professional fundraiser. Start with a reason, then invite the people who care about the same things you do.
+        </p>
+
+        <ol class="howr-steps">
+          <li class="howr-step">
+            <span class="howr-step-num">01</span>
+            <span class="howr-step-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg>
+            </span>
+            <div class="howr-step-body">
+              <h3>Create your page</h3>
+              <p>Tell your story, choose a goal and add a photo. Our team reviews each page before it goes live.</p>
+            </div>
+          </li>
+
+          <li class="howr-step">
+            <span class="howr-step-num">02</span>
+            <span class="howr-step-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.7 10.7 6.6-4.4M8.7 13.3l6.6 4.4"/></svg>
+            </span>
+            <div class="howr-step-body">
+              <h3>Bring people together</h3>
+              <p>Share your page by WhatsApp, email or social media and make it easy for others to join in.</p>
+            </div>
+          </li>
+
+          <li class="howr-step">
+            <span class="howr-step-num">03</span>
+            <span class="howr-step-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1L12 21l7.7-7.6 1.1-1a5.5 5.5 0 0 0 0-7.8Z"/></svg>
+            </span>
+            <div class="howr-step-body">
+              <h3>Help a child thrive</h3>
+              <p>Your fundraiser supports Almarah's programmes, while updates help supporters see the difference they made.</p>
+            </div>
+          </li>
+        </ol>
+
+        <?php if (can_fundraiser_capability('manage_pages')): ?>
+          <a class="howr-cta" href="<?= e(base_url('register')) ?>">
+            Start your fundraiser
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </a>
+        <?php endif; ?>
       </div>
-      <ol class="home-steps">
-        <li class="home-step">
-          <span class="home-step__number">01</span>
-          <span class="home-step__icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg>
-          </span>
-          <h3>Create your page</h3>
-          <p>Tell your story, choose a goal and add a photo. Our team reviews each page before it goes live.</p>
-        </li>
-        <li class="home-step">
-          <span class="home-step__number">02</span>
-          <span class="home-step__icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.7 10.7 6.6-4.4M8.7 13.3l6.6 4.4"/></svg>
-          </span>
-          <h3>Bring people together</h3>
-          <p>Share your page by WhatsApp, email or social media and make it easy for others to join in.</p>
-        </li>
-        <li class="home-step">
-          <span class="home-step__number">03</span>
-          <span class="home-step__icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1L12 21l7.7-7.6 1.1-1a5.5 5.5 0 0 0 0-7.8Z"/></svg>
-          </span>
-          <h3>Help a child thrive</h3>
-          <p>Your fundraiser supports Almarah&rsquo;s programmes, while updates help supporters see the difference they made.</p>
-        </li>
-      </ol>
+
+      <!-- ═══════════════════════════════════════
+           RIGHT — 4-IMAGE STAGGERED GRID
+           WITH BACKGROUND EFFECTS
+      ═══════════════════════════════════════ -->
+      <div class="howr-visual" aria-hidden="true">
+
+        <!-- Floating decorative shapes -->
+        <span class="howr-shape howr-shape--circle"></span>
+        <span class="howr-shape howr-shape--ring"></span>
+        <span class="howr-shape howr-shape--square"></span>
+        <span class="howr-shape howr-shape--dot"></span>
+
+        <!-- 4-image staggered grid -->
+        <div class="howr-grid">
+          <div class="howr-img howr-img--1">
+            <img src="<?= e(asset('assets/img/howto/1.png')) ?>" alt="" loading="lazy" width="600" height="600">
+          </div>
+          <div class="howr-img howr-img--2">
+            <img src="<?= e(asset('assets/img/howto/2.png')) ?>" alt="" loading="lazy" width="600" height="600">
+          </div>
+          <div class="howr-img howr-img--3">
+            <img src="<?= e(asset('assets/img/howto/3.png')) ?>" alt="" loading="lazy" width="600" height="600">
+          </div>
+          <div class="howr-img howr-img--4">
+            <img src="<?= e(asset('assets/img/howto/4.png')) ?>" alt="" loading="lazy" width="600" height="600">
+          </div>
+        </div>
+
+      </div>
+
     </div>
-  </section>
+  </div>
+</section>
 
   <!-- ============ FEATURED FUNDRAISERS ============ -->
   <?php if ($featured !== []): ?>
@@ -348,31 +405,57 @@ $trustPoints = array_values(array_filter(
   </section>
 
   <!-- ============ TRUST & ACCOUNTABILITY ============ -->
-  <section class="home-section home-trust" aria-labelledby="home-trust-title">
-    <div class="wrap">
-      <div class="home-trust__panel">
-        <div class="home-trust__main">
-          <span class="home-trust__symbol" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z"/><path d="m9 12 2 2 4-4"/></svg>
-          </span>
-          <span class="home-kicker">Give with confidence</span>
-          <h2 id="home-trust-title"><?= e((string) ($trust['heading'] ?? 'Your donation is safe and accountable')) ?></h2>
-          <p><?= e((string) ($trust['body'] ?? 'Donations are handled securely and recorded so supporters can follow the impact of their gift.')) ?></p>
-          <a class="home-inline-link" href="<?= e(base_url('about-us')) ?>">Learn how we work <span aria-hidden="true">&rarr;</span></a>
-        </div>
-        <div class="home-trust__details">
-          <h3>Clear from payment to impact</h3>
-          <ul>
-            <?php foreach ($trustPoints as $point): ?>
-              <li>
-                <span aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg></span>
-                <p><?= e($point) ?></p>
-              </li>
-            <?php endforeach; ?>
-          </ul>
-          <div class="home-trust__record"><strong><?= e(number_format($donationCount)) ?></strong><span>donations completed on this platform to date</span></div>
-        </div>
-      </div>
+<!-- ══════════ PARTNERS & AUTHORITIES ══════════ -->
+<section class="lc-carousel-section">
+  <div class="lc-carousel-header">
+    <div class="lc-carousel-tag">Recognised By</div>
+    <h2 class="lc-carousel-title">Our <span class="accent">Partners</span> and Authorities</h2>
+  </div>
+
+  <div class="lc-carousel-outer">
+    <div class="lc-track">
+
+      <!-- Set 1 -->
+      <div class="lc-logo-card"><div class="lc-logo-box"><img src="https://almarah.org/wp-content/uploads/2026/03/adv2.png" alt="ADV Partner"></div></div>
+      <div class="lc-dot-sep"></div>
+      <div class="lc-logo-card"><div class="lc-logo-box"><img src="https://almarah.org/wp-content/uploads/2026/03/adv.jpg" alt="ADV"></div></div>
+      <div class="lc-dot-sep"></div>
+      <div class="lc-logo-card"><div class="lc-logo-box"><img src="https://almarah.org/wp-content/uploads/2026/03/pcp-icon-01.png" alt="PCP"></div></div>
+      <div class="lc-dot-sep"></div>
+      <div class="lc-logo-card"><div class="lc-logo-box"><img src="https://almarah.org/wp-content/uploads/2026/03/companies-House-uk-icon-01.png" alt="Companies House UK"></div></div>
+      <div class="lc-dot-sep"></div>
+      <div class="lc-logo-card"><div class="lc-logo-box"><img src="https://almarah.org/wp-content/uploads/2026/03/punjab-chaity-comission-1.png" alt="Punjab Charity Commission"></div></div>
+      <div class="lc-dot-sep"></div>
+      <div class="lc-logo-card"><div class="lc-logo-box"><img src="https://almarah.org/wp-content/uploads/2026/03/eman-ethad-nazr-1.png" alt="Eman Ittehad"></div></div>
+      <div class="lc-dot-sep"></div>
+      <div class="lc-logo-card"><div class="lc-logo-box"><img src="https://almarah.org/wp-content/uploads/2026/03/child-protection.png" alt="Child Protection"></div></div>
+      <div class="lc-dot-sep"></div>
+      <div class="lc-logo-card"><div class="lc-logo-box"><img src="https://almarah.org/wp-content/uploads/2026/03/fbr-pak.png" alt="FBR Pakistan"></div></div>
+      <div class="lc-dot-sep"></div>
+      <div class="lc-logo-card"><div class="lc-logo-box"><img src="https://almarah.org/wp-content/uploads/2026/03/government-punjab.png" alt="Government of Punjab"></div></div>
+      <div class="lc-dot-sep"></div>
+
+      <!-- Set 2 (duplicate for seamless loop) -->
+      <div class="lc-logo-card"><div class="lc-logo-box"><img src="https://almarah.org/wp-content/uploads/2026/03/adv2.png" alt="ADV Partner"></div></div>
+      <div class="lc-dot-sep"></div>
+      <div class="lc-logo-card"><div class="lc-logo-box"><img src="https://almarah.org/wp-content/uploads/2026/03/adv.jpg" alt="ADV"></div></div>
+      <div class="lc-dot-sep"></div>
+      <div class="lc-logo-card"><div class="lc-logo-box"><img src="https://almarah.org/wp-content/uploads/2026/03/pcp-icon-01.png" alt="PCP"></div></div>
+      <div class="lc-dot-sep"></div>
+      <div class="lc-logo-card"><div class="lc-logo-box"><img src="https://almarah.org/wp-content/uploads/2026/03/companies-House-uk-icon-01.png" alt="Companies House UK"></div></div>
+      <div class="lc-dot-sep"></div>
+      <div class="lc-logo-card"><div class="lc-logo-box"><img src="https://almarah.org/wp-content/uploads/2026/03/punjab-chaity-comission-1.png" alt="Punjab Charity Commission"></div></div>
+      <div class="lc-dot-sep"></div>
+      <div class="lc-logo-card"><div class="lc-logo-box"><img src="https://almarah.org/wp-content/uploads/2026/03/eman-ethad-nazr-1.png" alt="Eman Ittehad"></div></div>
+      <div class="lc-dot-sep"></div>
+      <div class="lc-logo-card"><div class="lc-logo-box"><img src="https://almarah.org/wp-content/uploads/2026/03/child-protection.png" alt="Child Protection"></div></div>
+      <div class="lc-dot-sep"></div>
+      <div class="lc-logo-card"><div class="lc-logo-box"><img src="https://almarah.org/wp-content/uploads/2026/03/fbr-pak.png" alt="FBR Pakistan"></div></div>
+      <div class="lc-dot-sep"></div>
+      <div class="lc-logo-card"><div class="lc-logo-box"><img src="https://almarah.org/wp-content/uploads/2026/03/government-punjab.png" alt="Government of Punjab"></div></div>
+      <div class="lc-dot-sep"></div>
+
     </div>
-  </section>
+  </div>
+</section>
 </div>

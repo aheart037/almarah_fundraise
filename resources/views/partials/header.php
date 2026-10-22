@@ -14,8 +14,6 @@ $isActive = static fn (string $path): string => str_starts_with($currentPath, $p
 $fullName = !empty($authUser) ? trim((string) $authUser['first_name'] . ' ' . (string) $authUser['last_name']) : '';
 $headerLogoUrl = site_brand_asset('site.header_logo');
 
-// Links come from the menu assigned to "Header" in Admin → Menus; with none
-// assigned the standard links below are used.
 try {
     $headerMenu = app(\App\Services\MenuService::class)->forLocation('header');
 } catch (\Throwable $e) {
@@ -58,7 +56,10 @@ $menuActive = static function (string $path) use ($currentPath, $homePath): stri
         <a href="<?= e(base_url('fundraisers')) ?>" class="<?= $isActive('/fundraisers') ?>">Support a Fundraiser</a>
         <a href="<?= e(base_url('teams')) ?>" class="<?= $isActive('/teams') ?>">Teams</a>
         <a href="<?= e(base_url('campaigns')) ?>" class="<?= $isActive('/campaigns') ?>">Campaigns</a>
-        <a href="<?= e(base_url('about-us')) ?>" class="<?= $isActive('/about-us') ?>">About Us</a>
+        <a href="https://almarah.org/about/"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="<?= $isActive('https://almarah.org/about/') ?>">About Us</a>
       <?php endif; ?>
 
       <?php /* MOBILE ONLY: same buttons as .header-cta, shown inside the opened menu. Hidden on desktop. */ ?>
@@ -73,7 +74,10 @@ $menuActive = static function (string $path) use ($currentPath, $homePath): stri
           <a class="btn-login" href="<?= e(base_url('dashboard')) ?>"><?= e($fullName !== '' ? $fullName : 'Dashboard') ?></a>
           <form class="inline-form" method="post" action="<?= e(base_url('logout')) ?>">
             <?= csrf_field() ?>
-            <button class="btn-login" type="submit">Sign out</button>
+            <button class="btn-login btn-logout" type="submit">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+              <span>Sign out</span>
+            </button>
           </form>
         <?php else: ?>
           <?php if (can_fundraiser_capability('manage_pages')): ?>
@@ -95,7 +99,10 @@ $menuActive = static function (string $path) use ($currentPath, $homePath): stri
         <a class="btn-login" href="<?= e(base_url('dashboard')) ?>"><?= e($fullName !== '' ? $fullName : 'Dashboard') ?></a>
         <form class="inline-form" method="post" action="<?= e(base_url('logout')) ?>">
           <?= csrf_field() ?>
-          <button class="btn-login" type="submit">Sign out</button>
+          <button class="btn-login btn-logout" type="submit">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            <span>Sign out</span>
+          </button>
         </form>
       <?php else: ?>
         <?php if (can_fundraiser_capability('manage_pages')): ?>
@@ -114,21 +121,14 @@ $menuActive = static function (string $path) use ($currentPath, $homePath): stri
 </header>
 
 <style>
-/* ===== MOBILE MENU ADDITIONS ONLY =====
-   Desktop is untouched. Colours and fonts for links and buttons still come from your theme.
-   - To change when the mobile menu starts, replace 900px below.
-   - To force a menu colour, set  --mobile-menu-bg: #yourcolor;  in your CSS.
-     Otherwise it picks white or deep wine automatically, whichever keeps your link colour readable. */
-
+/* ===== MOBILE MENU ADDITIONS ONLY ===== */
 .site-header .mobile-menu-cta { display: none; }
 html.menu-lock, html.menu-lock body { overflow: hidden; }
 
 @media (max-width: 900px) {
-  /* Bar keeps only the logo and the menu button */
   .site-header .header-cta > :not(.nav-toggle) { display: none; }
   .site-header .wrap { flex-wrap: wrap; }
 
-  /* While open, the bar becomes solid so it never shows the page behind it */
   .site-header.menu-open {
     background-color: var(--mobile-menu-bg, var(--ah-menu-bg, #fff)) !important;
     background-image: none !important;
@@ -136,7 +136,6 @@ html.menu-lock, html.menu-lock body { overflow: hidden; }
     backdrop-filter: none !important;
   }
 
-  /* The menu is a solid sheet that starts right under the bar and fills the rest of the screen */
   .site-header .main-nav {
     display: none;
     position: fixed;
@@ -166,7 +165,6 @@ html.menu-lock, html.menu-lock body { overflow: hidden; }
   }
   .site-header .main-nav > a:first-child { border-top: 0; }
 
-  /* The bar's buttons, repeated at the bottom of the menu at full width */
   .site-header.menu-open .mobile-menu-cta {
     display: flex;
     flex-direction: column;
@@ -185,11 +183,17 @@ html.menu-lock, html.menu-lock body { overflow: hidden; }
     box-sizing: border-box;
   }
   .site-header .mobile-menu-cta .btn { padding-top: 14px; padding-bottom: 14px; }
+
+  /* ── Sign out button inside the mobile menu ── */
+  .site-header .mobile-menu-cta .inline-form button.btn-logout {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+  }
 }
 
-/* ===== DESKTOP LOGIN BUTTON =====
-   An outlined pill with a user icon. It takes its colour from your nav links, so it
-   works on a light or a dark header, and sits nicely beside the gold Start Fundraising button. */
+/* ===== DESKTOP LOGIN BUTTON ===== */
 @media (min-width: 901px) {
   .site-header .header-cta .header-login {
     display: inline-flex;
@@ -216,7 +220,24 @@ html.menu-lock, html.menu-lock body { overflow: hidden; }
     transform: translateY(-1px);
   }
   .site-header .header-cta .header-login:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+
+  /* ── Sign out button in the desktop header ── */
+  .site-header .header-cta .inline-form button.btn-logout {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
 }
+
+/* ── Shared icon sizing for the sign out button ── */
+.site-header .btn-logout svg {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+  stroke: currentColor;
+  fill: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .site-header .header-cta .header-login { transition: none; transform: none; }
 }
@@ -233,18 +254,15 @@ html.menu-lock, html.menu-lock body { overflow: hidden; }
   var mq = window.matchMedia('(max-width: 900px)');
   function onMq(fn) {
     if (mq.addEventListener) mq.addEventListener('change', fn);
-    else if (mq.addListener) mq.addListener(fn);   // Safari 13 and older
+    else if (mq.addListener) mq.addListener(fn);
   }
 
-  // Choose a solid menu colour that keeps your existing link colour readable:
-  // light link text gets deep wine, dark link text gets white.
   function pickMenuColour() {
     var link = nav.querySelector('a');
     var m = link && getComputedStyle(link).color.match(/[\d.]+/g);
     var light = m ? (0.299 * m[0] + 0.587 * m[1] + 0.114 * m[2]) / 255 > 0.6 : false;
     header.style.setProperty('--ah-menu-bg', light ? '#6b1038' : '#ffffff');
   }
-  // Start the sheet exactly under the bar, however tall your bar is
   function placeMenu() {
     var bottom = header.getBoundingClientRect().bottom;
     header.style.setProperty('--ah-top', Math.max(0, Math.round(bottom)) + 'px');
@@ -253,7 +271,7 @@ html.menu-lock, html.menu-lock body { overflow: hidden; }
   function setOpen(open) {
     if (open) {
       pickMenuColour();
-      placeMenu();                     // measure while the menu is still closed
+      placeMenu();
     }
     header.classList.toggle('menu-open', open);
     root.classList.toggle('menu-lock', open);
@@ -262,7 +280,6 @@ html.menu-lock, html.menu-lock body { overflow: hidden; }
   }
   function isOpen() { return header.classList.contains('menu-open'); }
 
-  // Capture phase: stops any older script bound to this same button from also toggling it.
   document.addEventListener('click', function (e) {
     if (!toggle.contains(e.target)) return;
     e.stopPropagation();
@@ -274,7 +291,6 @@ html.menu-lock, html.menu-lock body { overflow: hidden; }
     if (!isOpen()) return;
     if (e.key === 'Escape') { setOpen(false); toggle.focus(); return; }
     if (e.key !== 'Tab') return;
-    // Tab loops through the bar and the menu only, never the page hidden behind the sheet
     var items = Array.prototype.filter.call(
       header.querySelectorAll('a[href],button:not([disabled])'),
       function (el) { return el.offsetParent !== null; }
@@ -288,7 +304,6 @@ html.menu-lock, html.menu-lock body { overflow: hidden; }
   window.addEventListener('orientationchange', function () { if (isOpen()) setTimeout(placeMenu, 250); });
   onMq(function () { if (!mq.matches) setOpen(false); });
 
-  // Safety net: if your theme hides the menu button at this width, show it so the menu is reachable
   function ensureToggle() {
     toggle.style.display = '';
     if (mq.matches && getComputedStyle(toggle).display === 'none') toggle.style.display = 'inline-flex';
@@ -296,7 +311,6 @@ html.menu-lock, html.menu-lock body { overflow: hidden; }
   ensureToggle();
   onMq(ensureToggle);
 
-  // Match the login button colour to your nav links, including when the header changes colour on scroll
   var login = header.querySelector('.header-login');
   var firstLink = nav.querySelector('a');
   if (login && firstLink) {
