@@ -1,0 +1,7 @@
+[19-Oct-2026 12:19:33 UTC] [almarah] fundraise-submit failed: Undefined constant "App\Payments\Http\CURLE_PEER_FAILED_VERIFICATION" in /home/almaraho/fundraise.almarah.org/app/Payments/Http/CurlHttpClient.php:162
+[19-Oct-2026 12:19:49 UTC] [almarah] fundraise-submit failed: Undefined constant "App\Payments\Http\CURLE_PEER_FAILED_VERIFICATION" in /home/almaraho/fundraise.almarah.org/app/Payments/Http/CurlHttpClient.php:162
+[19-Oct-2026 12:20:53 UTC] [almarah] fundraise-submit failed: Undefined constant "App\Payments\Http\CURLE_PEER_FAILED_VERIFICATION" in /home/almaraho/fundraise.almarah.org/app/Payments/Http/CurlHttpClient.php:162
+[19-Oct-2026 12:21:43 UTC] [almarah] fundraise-submit failed: Undefined constant "App\Payments\Http\CURLE_PEER_FAILED_VERIFICATION" in /home/almaraho/fundraise.almarah.org/app/Payments/Http/CurlHttpClient.php:162
+[19-Oct-2026 14:44:18 UTC] [almarah] fundraise-submit failed: Undefined constant "App\Payments\Http\CURLE_PEER_FAILED_VERIFICATION" in /home/almaraho/fundraise.almarah.org/app/Payments/Http/CurlHttpClient.php:162
+[19-Oct-2026 20:56:29 UTC] [almarah] fundraise-submit failed: Undefined constant "App\Payments\Http\CURLE_PEER_FAILED_VERIFICATION" in /home/almaraho/fundraise.almarah.org/app/Payments/Http/CurlHttpClient.php:162
+[20-Oct-2026 00:45:15 UTC] [almarah] payment start failed [42D166] registration - Error: Undefined constant "App\Payments\Http\CURLE_PEER_FAILED_VERIFICATION" (CurlHttpClient.php:162)
