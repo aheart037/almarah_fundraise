@@ -15,6 +15,9 @@ return [
     'login' => [
         'max_attempts'    => (int) Env::get('LOGIN_MAX_ATTEMPTS', 5),
         'decay_minutes'   => (int) Env::get('LOGIN_DECAY_MINUTES', 15),
+        // v15: a second limit per IP address across ALL accounts, so one
+        // machine cannot try thousands of different emails or passwords.
+        'max_attempts_per_ip' => (int) Env::get('LOGIN_MAX_ATTEMPTS_PER_IP', 25),
     ],
 
     'donation_throttle' => [
@@ -38,7 +41,12 @@ return [
     'headers' => [
         'content_security_policy' => Env::get(
             'CSP',
-            "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self' data:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'"
+            // v15: inline <script> blocks exist in several templates, so
+            // 'unsafe-inline' stays for scripts; everything else is locked
+            // down (no plugins, no foreign scripts, no framing by other
+            // sites, no <base> hijack). form-action is left open on purpose:
+            // the payment hand-off posts to the bank's domain.
+            "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self'; object-src 'none'; frame-ancestors 'self'; base-uri 'self'"
         ),
     ],
 ];

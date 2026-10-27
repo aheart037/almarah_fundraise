@@ -15,6 +15,7 @@ use App\Http\Controllers\Public\FundraiserController;
 use App\Http\Controllers\Public\HomeController;
 use App\Http\Controllers\Public\PageController;
 use App\Http\Controllers\Public\PaymentController;
+use App\Http\Controllers\Public\SeoController;
 use App\Http\Controllers\Public\SetupController;
 use App\Http\Controllers\Public\TeamController;
 use App\Http\Middleware\CsrfMiddleware;
@@ -27,6 +28,10 @@ return static function (Router $router): void {
     // database is unreachable. See app/Http/Controllers/Public/SetupController.
     $router->get('/setup', [SetupController::class, 'index'], [], 'setup');
     $router->post('/setup', [SetupController::class, 'run'], [], 'setup.run');
+
+    // Search-engine files (v15): generated from the database.
+    $router->get('/robots.txt', [SeoController::class, 'robots'], [], 'seo.robots');
+    $router->get('/sitemap.xml', [SeoController::class, 'sitemap'], [], 'seo.sitemap');
 
     $router->get('/', [HomeController::class, 'index'], [], 'home');
     $router->get('/about-us', [PageController::class, 'about'], [], 'about');

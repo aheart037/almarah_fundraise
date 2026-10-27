@@ -16,3 +16,8 @@
 .phpunit.cache/
 *.sqlite
 .DS_Store
+
+# Server error logs must never be committed (v15) - they reveal server paths.
+/error_log
+/php_errorlog
+*.log

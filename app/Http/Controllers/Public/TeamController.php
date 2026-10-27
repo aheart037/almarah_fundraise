@@ -49,12 +49,16 @@ final class TeamController extends Controller
         $team = $this->teams->findPublishedBySlug((string) $request->routeParam('slug', ''));
 
         if ($team === null) {
-            return $this->render('public/errors/404', ['pageTitle' => 'Team not found'], 'layouts/public', 404);
+            return $this->render('public/errors/404', ['pageTitle' => 'Team not found', 'robots' => 'noindex,nofollow'], 'layouts/public', 404);
         }
 
         $id = (int) $team['id'];
 
         return $this->render('public/teams/show', [
+            'breadcrumbs'     => [
+                ['name' => 'Teams', 'path' => 'teams'],
+                ['name' => (string) $team['name'], 'path' => 'teams/' . rawurlencode((string) $team['slug'])],
+            ],
             'pageTitle'       => (string) $team['name'],
             'metaDescription' => mb_substr(strip_tags((string) ($team['description'] ?? '')), 0, 160),
             'team'            => $team,

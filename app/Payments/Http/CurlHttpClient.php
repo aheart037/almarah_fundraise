@@ -159,7 +159,10 @@ final class CurlHttpClient implements HttpClientInterface
             CURLE_SSL_CACERT             => 'TLS certificate verification failed',
             CURLE_SSL_CONNECT_ERROR      => 'TLS connection failed',
             CURLE_COULDNT_RESOLVE_HOST   => 'Could not resolve the payment provider host',
-            CURLE_PEER_FAILED_VERIFICATION => 'TLS peer verification failed',
+            // libcurl error 51. PHP does not define a CURLE_PEER_FAILED_VERIFICATION
+            // constant, so naming it here threw "Undefined constant" whenever a
+            // request failed, and hid the real reason behind a fatal error.
+            51                           => 'TLS peer verification failed',
         ];
 
         return $map[$errno] ?? ('Transport error: ' . mb_substr($error, 0, 120));

@@ -57,7 +57,7 @@ final class DonationStatusController extends Controller
         $donation = $this->donations->findByReference($reference);
 
         if ($donation === null) {
-            return $this->render('public/errors/404', ['pageTitle' => 'Donation not found'], 'layouts/public', 404);
+            return $this->render('public/errors/404', ['pageTitle' => 'Donation not found', 'robots' => 'noindex,nofollow'], 'layouts/public', 404);
         }
 
         return $this->render('public/donate/status', [

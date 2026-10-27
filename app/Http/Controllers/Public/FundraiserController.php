@@ -72,6 +72,21 @@ final class FundraiserController extends Controller
             'pageTitle'       => (string) $fundraiser['title'],
             'metaDescription' => mb_substr(strip_tags((string) ($fundraiser['impact_statement'] ?? $fundraiser['story'] ?? '')), 0, 160),
             'ogImage'         => $fundraiser['cover_image_path'] ?? null,
+            'ogType'          => 'article',
+            'breadcrumbs'     => [
+                ['name' => 'Fundraisers', 'path' => 'fundraisers'],
+                ['name' => (string) $fundraiser['title'], 'path' => 'fundraisers/' . rawurlencode((string) $fundraiser['slug'])],
+            ],
+            'structuredData'  => [
+                '@context'      => 'https://schema.org',
+                '@type'         => 'WebPage',
+                'name'          => (string) $fundraiser['title'],
+                'url'           => base_url('fundraisers/' . rawurlencode((string) $fundraiser['slug'])),
+                'datePublished' => !empty($fundraiser['published_at']) ? gmdate('c', (int) strtotime((string) $fundraiser['published_at'] . ' UTC')) : null,
+                'dateModified'  => !empty($fundraiser['updated_at']) ? gmdate('c', (int) strtotime((string) $fundraiser['updated_at'] . ' UTC')) : null,
+                'isPartOf'      => ['@id' => base_url() . '/#website'],
+                'about'         => ['@id' => base_url() . '/#organization'],
+            ],
             'fundraiser'      => $fundraiser,
             'updates'         => $this->fundraisers->updatesFor($id, true),
             'supporters'      => $supporters,
@@ -91,6 +106,7 @@ final class FundraiserController extends Controller
     private function notFound(): Response
     {
         return $this->render('public/errors/404', [
+            'robots'    => 'noindex,nofollow',
             'pageTitle' => 'Fundraiser not found',
         ], 'layouts/public', 404);
     }

@@ -41,10 +41,15 @@ final class CampaignController extends Controller
         $campaign = $this->campaigns->findActiveBySlug((string) $request->routeParam('slug', ''));
 
         if ($campaign === null) {
-            return $this->render('public/errors/404', ['pageTitle' => 'Campaign not found'], 'layouts/public', 404);
+            return $this->render('public/errors/404', ['pageTitle' => 'Campaign not found', 'robots' => 'noindex,nofollow'], 'layouts/public', 404);
         }
 
         return $this->render('public/campaigns/show', [
+            'breadcrumbs'     => [
+                ['name' => 'Campaigns', 'path' => 'campaigns'],
+                ['name' => (string) $campaign['title'], 'path' => 'campaigns/' . rawurlencode((string) $campaign['slug'])],
+            ],
+            'ogImage'         => $campaign['image_path'] ?? null,
             'pageTitle'       => (string) $campaign['title'],
             'metaDescription' => mb_substr(strip_tags((string) ($campaign['description'] ?? '')), 0, 160),
             'campaign'        => $campaign,

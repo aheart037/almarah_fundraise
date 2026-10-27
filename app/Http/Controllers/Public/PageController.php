@@ -40,10 +40,21 @@ final class PageController extends Controller
 
     public function faq(): Response
     {
+        $faqs = $this->content->faqs(true);
+
         return $this->render('public/pages/faq', [
             'pageTitle'       => 'Frequently asked questions',
             'metaDescription' => 'Answers about donating, starting a fundraiser, payment methods, receipts and privacy.',
-            'faqs'            => $this->content->faqs(true),
+            'faqs'            => $faqs,
+            'structuredData'  => $faqs === [] ? [] : [
+                '@context'   => 'https://schema.org',
+                '@type'      => 'FAQPage',
+                'mainEntity' => array_map(static fn (array $faq): array => [
+                    '@type'          => 'Question',
+                    'name'           => (string) $faq['question'],
+                    'acceptedAnswer' => ['@type' => 'Answer', 'text' => (string) $faq['answer']],
+                ], $faqs),
+            ],
         ], 'layouts/public');
     }
 

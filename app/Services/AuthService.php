@@ -90,6 +90,23 @@ final class AuthService
 
         $throttleKey = 'login:' . $email . ':' . $ip;
 
+        // v15: per-IP limit across every account, on top of the per-account
+        // limit below. Stops one machine from guessing many accounts.
+        $ipKey = 'login-ip:' . $ip;
+        $maxPerIp = (int) Config::get('security.login.max_attempts_per_ip', 25);
+
+        if ($this->rateLimiter->tooManyAttempts($ipKey, $maxPerIp)) {
+            $minutes = max(1, (int) ceil($this->rateLimiter->availableIn($ipKey) / 60));
+
+            $this->audit->log('account.login_throttled', 'user', null, ['scope' => 'ip']);
+
+            return [
+                'ok'      => false,
+                'message' => "Too many sign-in attempts. Please try again in {$minutes} minute(s).",
+                'user_id' => null,
+            ];
+        }
+
         if ($this->rateLimiter->tooManyAttempts($throttleKey, $maxAttempts)) {
             $minutes = max(1, (int) ceil($this->rateLimiter->availableIn($throttleKey) / 60));
 
@@ -111,6 +128,7 @@ final class AuthService
 
         if ($user === null || !$valid) {
             $this->rateLimiter->hit($throttleKey, $decay);
+            $this->rateLimiter->hit($ipKey, $decay);
 
             $this->audit->log('account.login_failed', 'user', $user['id'] ?? null, [
                 'email_hash' => hash('sha256', $email),

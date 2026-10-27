@@ -50,7 +50,7 @@ final class DonationController extends Controller
         $resolved = $this->resolveTarget($target, (string) $request->input('type', ''));
 
         if ($resolved === null) {
-            return $this->render('public/errors/404', ['pageTitle' => 'Not found'], 'layouts/public', 404);
+            return $this->render('public/errors/404', ['pageTitle' => 'Not found', 'robots' => 'noindex,nofollow'], 'layouts/public', 404);
         }
 
         $amount = $request->input('amount');

@@ -100,6 +100,67 @@ final class Response
         return BasePath::prefix($target);
     }
 
+    /** True when the visitor reached us over HTTPS (directly or via a proxy/CDN). */
+    public static function isSecureRequest(): bool
+    {
+        $https = strtolower((string) ($_SERVER['HTTPS'] ?? ''));
+        if ($https !== '' && $https !== 'off') {
+            return true;
+        }
+        if (strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https') {
+            return true;
+        }
+        if ((string) ($_SERVER['SERVER_PORT'] ?? '') === '443') {
+            return true;
+        }
+
+        return str_contains((string) ($_SERVER['HTTP_CF_VISITOR'] ?? ''), '"https"');
+    }
+
+    /**
+     * Extra browser protections added in v15. Each one is skipped when a
+     * controller already set the same header itself, so nothing is sent twice.
+     */
+    private function sendHardeningHeaders(): void
+    {
+        $already = array_change_key_case($this->headers, CASE_LOWER);
+
+        // Do not advertise the PHP version to scanners.
+        header_remove('X-Powered-By');
+
+        // Tell browsers to use HTTPS only (one year). Sent on HTTPS requests
+        // only, as the header is ignored over plain HTTP.
+        if (self::isSecureRequest()) {
+            header('Strict-Transport-Security: max-age=31536000');
+        }
+
+        // Switch off browser features the site never uses.
+        header('Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()');
+        header('Cross-Origin-Opener-Policy: same-origin-allow-popups');
+        header('X-Permitted-Cross-Domain-Policies: none');
+
+        // Content-Security-Policy: blocks injected scripts, plugins and
+        // look-alike base tags. It is deliberately not restricting
+        // form-action, because donors are posted on to the bank's own page.
+        if (!isset($already['content-security-policy'])) {
+            try {
+                $csp = trim((string) \App\Core\Config::get('security.headers.content_security_policy', ''));
+            } catch (\Throwable) {
+                $csp = '';
+            }
+            if ($csp !== '') {
+                header('Content-Security-Policy: ' . $csp);
+            }
+        }
+
+        // HTML pages hold per-visitor tokens (CSRF, flash messages): shared
+        // caches and proxies must never keep a copy.
+        $type = strtolower((string) ($already['content-type'] ?? ''));
+        if (!isset($already['cache-control']) && str_starts_with($type, 'text/html')) {
+            header('Cache-Control: private, no-cache, must-revalidate');
+        }
+    }
+
     public function send(): void
     {
         if (!headers_sent()) {
@@ -121,6 +182,7 @@ final class Response
             header('X-Content-Type-Options: nosniff');
             header('Referrer-Policy: strict-origin-when-cross-origin');
             header('X-Frame-Options: SAMEORIGIN');
+            $this->sendHardeningHeaders();
         }
 
         echo $this->body;

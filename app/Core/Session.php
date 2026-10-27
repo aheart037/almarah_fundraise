@@ -43,6 +43,10 @@ final class Session
         ini_set('session.use_strict_mode', '1');
         ini_set('session.gc_maxlifetime', (string) $lifetime);
         ini_set('session.use_only_cookies', '1');
+        ini_set('session.use_trans_sid', '0');          // never put the session id in a URL
+        ini_set('session.cookie_httponly', '1');
+        ini_set('session.sid_length', '48');
+        ini_set('session.sid_bits_per_character', '6');
 
         session_start();
         $this->started = true;
