@@ -102,6 +102,7 @@ return static function (Router $router) use ($admin, $adminCsrf, $superCsrf): vo
     // --- settings -----------------------------------------------------------
     $router->get('/admin/settings', [SettingsController::class, 'index'], $admin, 'admin.settings');
     $router->post('/admin/settings/gateway/{code}', [SettingsController::class, 'saveGateway'], $superCsrf, 'admin.settings.gateway');
+    $router->post('/admin/settings/order-number', [SettingsController::class, 'saveOrderNumber'], $superCsrf, 'admin.settings.order_number');
     $router->post('/admin/settings/smtp', [SettingsController::class, 'saveSmtp'], $superCsrf, 'admin.settings.smtp');
     $router->post('/admin/settings/smtp/test-connection', [SettingsController::class, 'testSmtp'], $superCsrf, 'admin.settings.smtp.test');
     $router->post('/admin/settings/smtp/send-test', [SettingsController::class, 'sendTestEmail'], $superCsrf, 'admin.settings.smtp.send');

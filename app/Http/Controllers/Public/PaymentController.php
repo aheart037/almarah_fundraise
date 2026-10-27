@@ -148,6 +148,35 @@ final class PaymentController extends Controller
         return $response->withHeader('Cache-Control', 'no-store');
     }
 
+    /**
+     * Is $value an identifier the bank issued for this payment, as opposed to
+     * our own (short, guessable) order number? For UBL the "provider order id"
+     * is only our order number echoed back, so it proves nothing.
+     *
+     * @param array<string,mixed> $transaction
+     */
+    private function isBankIssued(string $value, array $transaction): bool
+    {
+        return $value !== '' && !hash_equals((string) ($transaction['merchant_order_id'] ?? ''), $value);
+    }
+
+    /**
+     * Does the request carry a bank-issued id belonging to this transaction?
+     *
+     * @param array<string,mixed> $transaction
+     * @param array<int,string>   $bankIds
+     */
+    private function carriesBankProof(array $transaction, array $bankIds): bool
+    {
+        foreach (['provider_transaction_id', 'provider_order_id'] as $column) {
+            $stored = (string) ($transaction[$column] ?? '');
+            if ($this->isBankIssued($stored, $transaction) && in_array($stored, $bankIds, true)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private function handleReturn(Request $request, string $gateway): Response
     {
         $payload = $request->isPost() ? array_merge($request->all(), $request->json()) : $request->all();
@@ -177,10 +206,32 @@ final class PaymentController extends Controller
                 }
             }
 
+            // Identifiers the BANK issued. Order numbers are short and
+            // sequential (0001, 0002 …), so one of ours is never enough by
+            // itself: anyone could type ?OrderID=0001. It only counts when the
+            // request also carries the bank's own id for that same payment.
+            $bankIds = [];
+            foreach (['TransactionID', 'transactionId', 'orderId'] as $bankKey) {
+                $bankValue = $payload[$bankKey] ?? '';
+                if ((is_string($bankValue) || is_int($bankValue)) && trim((string) $bankValue) !== '') {
+                    $bankIds[] = trim((string) $bankValue);
+                }
+            }
+
             foreach ($candidates as $candidate) {
-                $transaction = $this->payments->findByMerchantOrderId($candidate)
+                $byOrderNumber = $this->payments->findByMerchantOrderId($candidate);
+                if ($byOrderNumber !== null && !$this->carriesBankProof($byOrderNumber, $bankIds)) {
+                    $byOrderNumber = null;
+                }
+
+                $byProviderOrder = $this->payments->findByProviderOrderId($gateway, $candidate);
+                if ($byProviderOrder !== null && !$this->isBankIssued((string) ($byProviderOrder['provider_order_id'] ?? ''), $byProviderOrder)) {
+                    $byProviderOrder = null;
+                }
+
+                $transaction = $byOrderNumber
                     ?? $this->payments->findByProviderTransactionId($gateway, $candidate)
-                    ?? $this->payments->findByProviderOrderId($gateway, $candidate);
+                    ?? $byProviderOrder;
 
                 if ($transaction !== null) {
                     $stateToken = $this->stateTokenFromTransaction($transaction);

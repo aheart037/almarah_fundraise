@@ -36,7 +36,8 @@ final class DonationService
         private PaymentLock $lock,
         private RateLimiter $rateLimiter,
         private AuditService $audit,
-        private Logger $logger
+        private Logger $logger,
+        private OrderNumberService $orderNumbers
     ) {
     }
 
@@ -154,7 +155,8 @@ final class DonationService
                 'idempotency_key'           => 'reg:' . $gatewayCode . ':' . $donationId . ':' . Str::randomHex(8),
             ]);
 
-            $request = new PaymentRequest(
+            $buildRequest = function (string $merchantOrderId, string $callbackState) use ($gateway, $amountMinor, $currency, $target, $reference, $gatewayCode, $donationId, $input): PaymentRequest {
+                return new PaymentRequest(
                 merchantOrderId: $merchantOrderId,
                 amountMinor: $amountMinor,
                 currency: $currency,
@@ -170,40 +172,60 @@ final class DonationService
                     'callback_state'     => $callbackState,
                 ]
             );
+            };
+            $request = $buildRequest($merchantOrderId, $callbackState);
 
-            try {
-                $registration = $gateway->register($request);
-            } catch (PaymentGatewayException $e) {
-                $this->donations->updateStatus($donationId, 'failed');
-                $this->payments->updateTransaction($transactionId, [
-                    'status'                        => 'failed',
-                    'provider_response_code'        => $e->providerCode() !== null ? (string) $e->providerCode() : $e->reason(),
-                    'provider_response_description'=> mb_substr($e->getMessage(), 0, 255),
-                ]);
+            // A bank refuses an order number it has seen before (Meezan error 1).
+            // That can happen if this account also takes payments from another
+            // system, so take the next number and try again instead of failing.
+            for ($numberRetry = 0; ; $numberRetry++) {
+                try {
+                    $registration = $gateway->register($request);
+                } catch (PaymentGatewayException $e) {
+                    $this->donations->updateStatus($donationId, 'failed');
+                    $this->payments->updateTransaction($transactionId, [
+                        'status'                        => 'failed',
+                        'provider_response_code'        => $e->providerCode() !== null ? (string) $e->providerCode() : $e->reason(),
+                        'provider_response_description'=> mb_substr($e->getMessage(), 0, 255),
+                    ]);
 
-                $this->audit->log('donation.registration_failed', 'donation', (string) $donationId, [
+                    $this->audit->log('donation.registration_failed', 'donation', (string) $donationId, [
+                        'gateway' => $gatewayCode,
+                        'reason'  => $e->reason(),
+                    ]);
+
+                    $this->logger->payment('Gateway registration failed', [
+                        'gateway'   => $gatewayCode,
+                        'reference' => $reference,
+                        'reason'    => $e->reason(),
+                    ]);
+
+                    // Keep the gateway's own reason code (untrusted_payment_url,
+                    // currency_mismatch, transport_error, ...) so operators can
+                    // tell a phishing attempt from an outage; only the donor-facing
+                    // message is generic.
+                    throw new PaymentGatewayException(
+                        'We could not start the payment with ' . $gateway->label() . '. Please try again or choose another payment method.',
+                        $gatewayCode,
+                        $e->reason() !== '' ? $e->reason() : 'registration_failed',
+                        $e->providerCode(),
+                        $e->safeContext(),
+                        $e
+                    );
+                }
+
+                if ($registration->ok || $numberRetry >= 8 || !$this->isDuplicateOrderNumber($gatewayCode, $registration)) {
+                    break;
+                }
+
+                $this->logger->payment('Gateway order number already used, taking the next one', [
                     'gateway' => $gatewayCode,
-                    'reason'  => $e->reason(),
+                    'order'   => $merchantOrderId,
                 ]);
-
-                $this->logger->payment('Gateway registration failed', [
-                    'gateway'   => $gatewayCode,
-                    'reference' => $reference,
-                    'reason'    => $e->reason(),
-                ]);
-
-                // Keep the gateway's own reason code (untrusted_payment_url,
-                // currency_mismatch, transport_error, ...) so operators can
-                // tell a phishing attempt from an outage; only the donor-facing
-                // message is generic.
-                throw new PaymentGatewayException(
-                    'We could not start the payment with ' . $gateway->label() . '. Please try again or choose another payment method.',
-                    $gatewayCode,
-                    $e->reason() !== '' ? $e->reason() : 'registration_failed',
-                    $e->providerCode(),
-                    $e->safeContext(),
-                    $e
-                );
+                $merchantOrderId = $this->buildMerchantOrderId($reference, $gatewayCode);
+                $callbackState = PaymentStateToken::issue($merchantOrderId);
+                $this->payments->renumber($transactionId, $merchantOrderId, hash('sha256', $callbackState));
+                $request = $buildRequest($merchantOrderId, $callbackState);
             }
 
             if (!$registration->ok) {
@@ -796,22 +818,25 @@ final class DonationService
 
     private function buildMerchantOrderId(string $reference, string $gatewayCode): string
     {
-        if ($gatewayCode === 'etisalat') {
-            // UBL's Qurbani implementation documents an EPG OrderID limit of
-            // 16 alphanumeric characters with no punctuation. Keep the
-            // human-facing public_reference separate and send a 64-bit hex ID.
-            return strtoupper(Str::randomHex(8));
-        }
-
-        if ($gatewayCode === 'meezan') {
-            // The Meezan Pay plugin sends a purely numeric orderNumber, and
-            // the bank refuses to reuse one. Date-time + random digits is
-            // numeric, unique per attempt and fits comfortably in 64 bits.
-            return gmdate('ymdHis') . str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        if ($gatewayCode === 'etisalat' || $gatewayCode === 'meezan') {
+            // Short sequential numbers (0001, 0002 …) shared by both banks, so
+            // a payment can be traced from the bank's page and reports to the
+            // donation in Admin → Donations. The number is only a label: it is
+            // never accepted on its own as proof of a payment (see
+            // PaymentController::handleReturn). Numeric, so it also satisfies
+            // Meezan's numeric orderNumber and UBL's 16-character OrderID.
+            return $this->orderNumbers->next();
         }
 
         // Preserve the existing merchant-order format for other gateways.
         return strtoupper(str_replace('-', '', $reference)) . strtoupper(Str::randomHex(2));
+    }
+
+    /** Did the bank turn the registration down only because it has seen this order number? */
+    private function isDuplicateOrderNumber(string $gatewayCode, \App\Payments\Dtos\PaymentRegistrationResult $registration): bool
+    {
+        // Meezan / BPC: errorCode 1 = the order number is duplicated or already processed.
+        return $gatewayCode === 'meezan' && !$registration->ok && (string) $registration->providerCode === '1';
     }
 
     /** @param array<string,mixed> $target */

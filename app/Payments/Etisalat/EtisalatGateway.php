@@ -132,7 +132,9 @@ final class EtisalatGateway implements PaymentGatewayInterface
             'Amount'          => $request->amountDecimal(),
             'Currency'        => $currency,
             'OrderID'         => $request->merchantOrderId,
-            'OrderName'       => 'Donation',
+            // The EPG payment page shows OrderName, so use the order number
+            // (0001, 0002 …) rather than a fixed word, to make payments traceable.
+            'OrderName'       => $request->merchantOrderId,
             'OrderInfo'       => $orderInfo,
             'TransactionHint' => (string) ($this->config['transaction_hint'] ?? 'CPT:Y;VCC:Y;'),
             'ReturnPath'      => $request->returnUrl,
@@ -477,7 +479,7 @@ final class EtisalatGateway implements PaymentGatewayInterface
         // and amount echoed by Finalization to match what this site registered.
         // The bank's integration add-on verifies these fields before completion.
         if ($status === 'completed') {
-            if ($expectedOrderId === '' || $providerOrderId === null || !hash_equals($expectedOrderId, $providerOrderId)) {
+            if ($expectedOrderId === '' || $providerOrderId === null || !self::sameOrderNumber($expectedOrderId, $providerOrderId)) {
                 $this->logger->security('Etisalat order id mismatch on finalization', [
                     'transaction' => $transactionId,
                 ]);
@@ -643,6 +645,19 @@ final class EtisalatGateway implements PaymentGatewayInterface
     }
 
     /** @param array<string,mixed> $response @param array<int,string> $keys @return array<string,mixed> */
+    /**
+     * Order numbers are compared exactly, except that a bank echoing "0042" as
+     * "42" (leading zeros dropped) is still the same number.
+     */
+    private static function sameOrderNumber(string $expected, string $actual): bool
+    {
+        if (hash_equals($expected, $actual)) {
+            return true;
+        }
+        return ctype_digit($expected) && ctype_digit($actual)
+            && hash_equals(ltrim($expected, '0'), ltrim($actual, '0'));
+    }
+
     private function safeSubset(array $response, array $keys): array
     {
         $out = [];

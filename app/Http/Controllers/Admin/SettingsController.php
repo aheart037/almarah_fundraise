@@ -18,6 +18,7 @@ use App\Payments\PaymentGatewayManager;
 use App\Services\AuditService;
 use App\Services\AuthService;
 use App\Services\FundraiserCapabilityService;
+use App\Services\OrderNumberService;
 use App\Services\SettingsService;
 use App\Services\UploadService;
 
@@ -56,7 +57,8 @@ final class SettingsController extends Controller
         private TransportInterface $transport,
         private UploadService $uploads,
         private Logger $logger,
-        private FundraiserCapabilityService $fundraiserCapabilities
+        private FundraiserCapabilityService $fundraiserCapabilities,
+        private OrderNumberService $orderNumbers
     ) {
         parent::__construct($view, $session, $csrf, $auth);
     }
@@ -78,6 +80,7 @@ final class SettingsController extends Controller
 
         return $this->render('admin/settings/index', [
             'pageTitle'    => 'Settings',
+            'nextOrderNumber' => $this->orderNumbers->peek(),
             'gateways'     => $gatewayForms,
             'gatewayStatus'=> $this->settings->gatewayStatus(),
             'mail'         => [
@@ -112,6 +115,27 @@ final class SettingsController extends Controller
                 'gateway.etisalat.password',
             ],
         ], 'layouts/admin');
+    }
+
+    /** Move the order-number counter forward (it can never go back). */
+    public function saveOrderNumber(Request $request): Response
+    {
+        $raw = trim((string) $request->input('next_order_number', ''));
+        if ($raw === '' || !ctype_digit($raw)) {
+            $this->flashError('Enter the next order number as digits only, for example 5000.');
+            return $this->redirect('/admin/settings#order-numbers');
+        }
+
+        try {
+            $this->orderNumbers->setNext((int) $raw, (int) $this->auth->id());
+        } catch (\InvalidArgumentException $e) {
+            $this->flashError($e->getMessage());
+            return $this->redirect('/admin/settings#order-numbers');
+        }
+
+        $this->audit->log('settings.order_number', 'settings', 'orders.counter', ['next' => (int) $raw], (int) $this->auth->id());
+        $this->flashSuccess('The next payment will use order number ' . OrderNumberService::format((int) $raw) . '.');
+        return $this->redirect('/admin/settings#order-numbers');
     }
 
     public function saveSite(Request $request): Response

@@ -56,6 +56,21 @@ final class PaymentRepository
         $this->db->update('payment_transactions', $payload, 'id = :id', ['id' => $id]);
     }
 
+    /**
+     * Give a not-yet-registered transaction a different order number (used when
+     * a bank reports the first number as already taken). Re-issues the state
+     * hash, which is derived from the order number.
+     */
+    public function renumber(int $id, string $merchantOrderId, string $callbackStateHash): void
+    {
+        $this->db->update(
+            'payment_transactions',
+            ['merchant_order_id' => $merchantOrderId, 'callback_state_hash' => $callbackStateHash],
+            'id = :id',
+            ['id' => $id]
+        );
+    }
+
     public function find(int $id): ?array
     {
         return $this->db->selectOne(

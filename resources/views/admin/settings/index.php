@@ -222,6 +222,34 @@ $faviconUrl = site_brand_asset('site.favicon');
   </section>
 <?php endforeach; ?>
 
+<section class="panel" id="order-numbers">
+  <div class="panel-head">
+    <h2>Order numbers</h2>
+  </div>
+  <p>
+    Every payment gets the next number in one sequence shared by both banks (<span class="mono">0001</span>, <span class="mono">0002</span>,
+    <span class="mono">0003</span> …). The bank shows this number on its payment page and in its reports, and it appears as
+    <b>Order id</b> on each donation in Admin → Donations, so any payment can be traced.
+  </p>
+  <p class="muted" style="margin-top:0;font-size:13px">
+    Numbers are at least four digits and carry on past <span class="mono">9999</span> (<span class="mono">10000</span> …) so one is never repeated.
+    A number is used up every time a payment is started, whether or not the donor completes it.
+  </p>
+  <form method="post" action="<?= e(base_url('admin/settings/order-number')) ?>" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+    <?= csrf_field() ?>
+    <div class="field" style="margin:0">
+      <label for="next_order_number">Next order number</label>
+      <input class="input mono" type="text" inputmode="numeric" pattern="[0-9]+" id="next_order_number" name="next_order_number"
+             value="<?= e((string) ($nextOrderNumber ?? '0001')) ?>" style="max-width:160px" <?= $isSuper ? '' : 'disabled' ?>>
+    </div>
+    <button class="btn btn-light" type="submit" <?= $isSuper ? '' : 'disabled' ?>>Save</button>
+  </form>
+  <p class="form-help" style="margin-top:10px">
+    You can only move forward. Raise it, for example, if your bank account also takes payments from another system that already uses low numbers.
+    If a bank reports a number as already used, the site automatically takes the next one.
+  </p>
+</section>
+
 <section class="panel" id="smtp">
   <div class="panel-head">
     <h2>Email / SMTP</h2>

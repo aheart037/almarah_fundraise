@@ -20,8 +20,11 @@ use RuntimeException;
  *
  *  - unguessable without APP_KEY;
  *  - re-derivable from the stored transaction row, which is what lets us
- *    resolve a return trip from an order number alone when a provider drops
- *    our query parameters (Meezan and the EPG both do this);
+ *    resolve a return trip when a provider drops our query parameters (Meezan
+ *    and the EPG both do this). The row is found through an identifier the
+ *    BANK issued (TransactionID / orderId). Our own order number is short and
+ *    sequential, so it is only accepted together with that bank identifier;
+ *    see PaymentController::handleReturn;
  *  - bound to exactly one transaction.
  *
  * The token deliberately does NOT encode the expiry. The window is enforced
