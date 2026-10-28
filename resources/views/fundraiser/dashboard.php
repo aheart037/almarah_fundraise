@@ -23,7 +23,7 @@ foreach ($fundraisers as $row) {
 ?>
 <div class="dash-head">
   <div>
-    <h1>Welcome back, <?= e((string) ($authUser['first_name'] ?? 'friend')) ?></h1>
+    <h1><span data-greeting>Welcome back</span>, <?= e((string) ($authUser['first_name'] ?? 'friend')) ?></h1>
     <p class="sub">Here is how your fundraising is going.</p>
   </div>
   <div class="sr-actions">
@@ -153,7 +153,14 @@ foreach ($fundraisers as $row) {
                   <div class="muted mono" style="font-size:12px"><?= e((string) $row['slug']) ?></div>
                 </td>
                 <td><span class="<?= e(status_badge_class((string) $row['status'])) ?>"><?= e(str_replace('_', ' ', (string) $row['status'])) ?></span></td>
-                <td class="num"><?= e(money_short((int) $row['raised_minor'])) ?></td>
+                <?php
+                $rowGoal = (int) $row['goal_minor'];
+                $rowPct = $rowGoal > 0 ? max(0, min(100, (int) round(((int) $row['raised_minor'] / $rowGoal) * 100))) : 0;
+                ?>
+                <td class="num">
+                  <?= e(money_short((int) $row['raised_minor'])) ?>
+                  <div class="progress sm fr-mini" title="<?= e((string) $rowPct) ?>% of goal"><span data-w="<?= e((string) $rowPct) ?>"></span></div>
+                </td>
                 <td class="num"><?= e(money_short((int) $row['goal_minor'])) ?></td>
               </tr>
             <?php endforeach; ?>

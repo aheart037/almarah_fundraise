@@ -3566,3 +3566,284 @@ pre.code {
   .howr-step,
   .howr-cta { transition: none !important; }
 }
+/* ==========================================================================
+   Fundraiser create / edit form (v16)
+   ========================================================================== */
+.fr-layout { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 24px; align-items: start; }
+.fr-main { display: grid; gap: 22px; }
+
+.fr-card {
+  background: #fff; border: 1px solid var(--line); border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm); padding: 28px;
+}
+.fr-card-head { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--line-soft); }
+.fr-card-head h2 { margin: 0; font-size: 20px; line-height: 1.25; }
+.fr-card-head p { margin: 4px 0 0; color: var(--muted); font-size: 14.5px; line-height: 1.55; }
+.fr-step {
+  flex: 0 0 auto; width: 38px; height: 38px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--brand); color: #fff; font-family: var(--font-head); font-weight: 800; font-size: 16px;
+  box-shadow: 0 0 0 5px var(--brand-tint-2);
+}
+.fr-card .field:last-child { margin-bottom: 0; }
+.fr-form .field > label { text-transform: none; letter-spacing: .01em; font-size: 14px; font-weight: 700; }
+.fr-optional {
+  margin-left: 6px; padding: 2px 8px; border-radius: 999px; background: var(--cream);
+  color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; vertical-align: middle;
+}
+.fr-form .input, .fr-form .textarea, .fr-form .fr-select { background: #fcfbfa; }
+.fr-form .input:focus, .fr-form .textarea:focus, .fr-form .fr-select:focus { background: #fff; }
+.fr-form .fr-select { width: 100%; }
+.fr-form .textarea { resize: vertical; line-height: 1.65; min-height: 190px; }
+
+.fr-help { display: flex; justify-content: space-between; gap: 14px; align-items: flex-start; }
+.fr-count { flex: 0 0 auto; font-variant-numeric: tabular-nums; font-weight: 600; color: var(--muted-2); }
+.fr-count.is-ok { color: #1e7a45; }
+.fr-count.is-warn { color: #b3261e; }
+.fr-goal-preview { flex: 0 0 auto; font-family: var(--font-head); font-weight: 800; color: var(--brand); white-space: nowrap; }
+
+.fr-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.fr-chip {
+  height: 36px; padding: 0 15px; border-radius: 999px; border: 1px solid var(--line);
+  background: #fff; color: var(--text); font: 600 13.5px/1 inherit; font-family: inherit; cursor: pointer;
+  transition: border-color .2s, background .2s, color .2s;
+}
+.fr-chip:hover { border-color: var(--brand); color: var(--brand); }
+.fr-chip.is-active { background: var(--brand); border-color: var(--brand); color: #fff; }
+.fr-chip-ghost { border-style: dashed; color: var(--muted); }
+
+/* Cover photo drop zone */
+.fr-drop {
+  position: relative; display: block; margin: 0; overflow: hidden; cursor: pointer;
+  border: 2px dashed rgba(169, 45, 99, .35); border-radius: var(--radius-lg);
+  background: var(--brand-tint); min-height: 220px; text-align: center;
+  transition: border-color .2s, background .2s;
+}
+.fr-drop:hover, .fr-drop.is-drag { border-color: var(--brand); background: var(--brand-tint-2); }
+.fr-drop:focus-within { box-shadow: var(--ring); border-color: var(--brand); }
+.fr-drop input[type="file"] { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.fr-drop-empty {
+  min-height: 216px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  padding: 24px; color: var(--ink-2); pointer-events: none;
+}
+.fr-drop-empty svg { width: 46px; height: 46px; color: var(--brand); margin-bottom: 6px; }
+.fr-drop-empty b { font-size: 16px; }
+.fr-drop-empty small { color: var(--muted); font-size: 13px; }
+.fr-drop-preview { display: block; width: 100%; max-height: 340px; object-fit: cover; }
+.fr-drop-preview[hidden] { display: none; }
+.fr-drop-change {
+  position: absolute; right: 12px; bottom: 12px; display: none; padding: 8px 14px; border-radius: 999px;
+  background: rgba(26, 8, 16, .82); color: #fff; font-size: 13px; font-weight: 700; pointer-events: none;
+}
+.fr-drop.has-image { border-style: solid; background: #fff; min-height: 0; }
+.fr-drop.has-image .fr-drop-empty { display: none; }
+.fr-drop.has-image .fr-drop-change { display: inline-block; }
+
+/* Sidebar */
+.fr-side { display: grid; gap: 18px; position: sticky; top: 90px; }
+.fr-side .fr-card { padding: 22px; }
+.fr-side h3 { margin: 0 0 4px; font-size: 17px; }
+.fr-side-sub { margin: 0 0 16px; color: var(--muted); font-size: 14px; line-height: 1.55; }
+.fr-actions-card .btn { margin-top: 10px; }
+.fr-actions-card .btn:first-of-type { margin-top: 0; }
+.fr-review {
+  display: flex; gap: 12px; align-items: flex-start; padding: 14px; margin-bottom: 14px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--cream);
+}
+.fr-review input { margin-top: 4px; width: 18px; height: 18px; accent-color: var(--brand); flex: 0 0 auto; }
+.fr-review b { display: block; font-size: 14.5px; color: var(--ink-2); }
+.fr-review small { display: block; margin-top: 2px; color: var(--muted); font-size: 13px; line-height: 1.45; }
+.fr-tips { background: var(--brand-tint); border-color: var(--brand-tint-2); }
+.fr-tips ul { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 12px; }
+.fr-tips li { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; line-height: 1.5; color: var(--ink-2); }
+.fr-tips li svg { flex: 0 0 auto; width: 18px; height: 18px; margin-top: 2px; padding: 3px; border-radius: 50%; background: var(--brand); color: #fff; }
+#frSubmit.is-busy { opacity: .7; pointer-events: none; }
+
+@media (max-width: 960px) {
+  .fr-layout { grid-template-columns: 1fr; }
+  .fr-side { position: static; }
+  .fr-actions-card { order: 2; }
+}
+@media (max-width: 560px) {
+  .fr-card { padding: 20px 16px; }
+  .fr-card-head { gap: 12px; }
+  .fr-step { width: 34px; height: 34px; }
+  .fr-help { flex-direction: column; gap: 4px; }
+}
+
+/* ==========================================================================
+   Dashboard polish + motion (v17) - user dashboard and admin area
+   Everything here is scoped to .dash-body / .admin-body. Motion is switched
+   off for visitors who ask their device for reduced motion (bottom of block).
+   ========================================================================== */
+@keyframes dashRise   { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+@keyframes dashSlide  { from { opacity: 0; transform: translateX(-14px); } to { opacity: 1; transform: none; } }
+@keyframes dashRow    { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: none; } }
+@keyframes dashGrow   { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes dashLine   { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes dashFloat  { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+@keyframes dashShine  { 0% { transform: translate(-30%, -30%); } 50% { transform: translate(20%, 15%); } 100% { transform: translate(-30%, -30%); } }
+@keyframes dashPulse  { 0% { box-shadow: 0 0 0 0 rgba(169, 45, 99, .45); } 70%, 100% { box-shadow: 0 0 0 7px rgba(169, 45, 99, 0); } }
+@keyframes dashRing   { 0%, 100% { box-shadow: 0 0 0 3px rgba(255, 255, 255, .30); } 50% { box-shadow: 0 0 0 7px rgba(255, 255, 255, .10); } }
+@keyframes dashRipple { to { transform: scale(3.2); opacity: 0; } }
+@keyframes dashLoad   { from { width: 0; } to { width: 82%; } }
+
+/* ---- page ---- */
+.dash-body, .admin-body {
+  background:
+    radial-gradient(900px 420px at 92% -8%, rgba(169, 45, 99, .09), transparent 62%),
+    radial-gradient(760px 420px at -8% 6%, rgba(242, 194, 0, .10), transparent 58%),
+    #fbf8f6;
+}
+.dash-main { animation: dashRise .55s var(--ease) both; transition: opacity .18s ease; }
+.dash-main.is-leaving { opacity: .35; }
+
+.dash-head h1 { font-size: 28px; letter-spacing: -.01em; }
+.dash-head h1::after {
+  content: ""; display: block; width: 52px; height: 4px; margin-top: 10px; border-radius: 4px;
+  background: linear-gradient(90deg, var(--brand), var(--gold)); transform-origin: left;
+  animation: dashLine .8s .25s var(--ease) both;
+}
+.dash-head .sub { animation: dashRise .6s .1s var(--ease) both; }
+.dash-head .sr-actions { animation: dashRise .6s .18s var(--ease) both; }
+
+/* ---- sidebar ---- */
+.dash-side {
+  border-radius: 20px; border-color: rgba(169, 45, 99, .10);
+  background: rgba(255, 255, 255, .92); backdrop-filter: blur(8px);
+  box-shadow: 0 14px 34px -18px rgba(107, 15, 53, .28);
+  animation: dashRise .5s var(--ease) both;
+}
+.dash-side-head { position: relative; overflow: hidden; padding: 24px 20px; }
+.dash-side-head::before {
+  content: ""; position: absolute; width: 260px; height: 260px; top: -90px; left: -60px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, .22), transparent 65%);
+  animation: dashShine 11s ease-in-out infinite; pointer-events: none;
+}
+.dash-side-head::after {
+  content: ""; position: absolute; width: 120px; height: 120px; right: -34px; bottom: -48px; border-radius: 50%;
+  background: rgba(242, 194, 0, .20); animation: dashFloat 7s ease-in-out infinite; pointer-events: none;
+}
+.dash-side-head > * { position: relative; z-index: 1; }
+.dash-body .avatar, .admin-body .avatar {
+  width: 44px; height: 44px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+  font-family: var(--font-head); font-weight: 800; font-size: 14px; flex: 0 0 auto;
+  background: linear-gradient(135deg, var(--brand-light), var(--brand-darker)); color: #fff;
+}
+.dash-side-head .avatar { width: 52px; height: 52px; font-size: 17px; background: rgba(255, 255, 255, .20); animation: dashRing 3.6s ease-in-out infinite; }
+
+.dash-nav a {
+  position: relative; overflow: hidden; border-radius: 12px;
+  transition: background .25s var(--ease), color .25s var(--ease), transform .25s var(--ease), box-shadow .25s var(--ease);
+  animation: dashSlide .5s var(--ease) both; animation-delay: calc(var(--i, 0) * 38ms + 120ms);
+}
+.dash-nav a::before {
+  content: ""; position: absolute; left: 0; top: 22%; bottom: 22%; width: 3px; border-radius: 0 3px 3px 0;
+  background: var(--brand); transform: scaleY(0); transition: transform .28s var(--ease);
+}
+.dash-nav a svg { transition: transform .3s var(--ease), color .25s; }
+.dash-nav a:hover { transform: translateX(4px); }
+.dash-nav a:hover::before { transform: scaleY(1); }
+.dash-nav a:hover svg { transform: scale(1.14) rotate(-6deg); color: var(--brand); }
+.dash-nav a.active {
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-dark) 100%);
+  box-shadow: 0 10px 22px -10px rgba(169, 45, 99, .75);
+}
+.dash-nav a.active::before { display: none; }
+.dash-nav a.active:hover { transform: translateX(2px); }
+.dash-nav a.active:hover svg { color: #fff; }
+
+/* ---- stat cards ---- */
+.stat-card {
+  position: relative; overflow: hidden; border-radius: 20px; padding: 20px 22px;
+  transition: transform .35s var(--ease), box-shadow .35s var(--ease), border-color .35s;
+  animation: dashRise .65s var(--ease) both; animation-delay: calc(var(--i, 0) * 85ms + 80ms);
+}
+.stat-card:nth-child(1) { --i: 0; } .stat-card:nth-child(2) { --i: 1; } .stat-card:nth-child(3) { --i: 2; }
+.stat-card:nth-child(4) { --i: 3; } .stat-card:nth-child(5) { --i: 4; } .stat-card:nth-child(6) { --i: 5; }
+.stat-card::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .3s;
+  background: radial-gradient(240px circle at var(--mx, 50%) var(--my, 0%), rgba(169, 45, 99, .11), transparent 62%);
+}
+.stat-card:hover { transform: translateY(-6px); box-shadow: 0 22px 40px -22px rgba(107, 15, 53, .45); border-color: rgba(169, 45, 99, .22); }
+.stat-card:hover::before { opacity: 1; }
+.stat-card > * { position: relative; z-index: 1; }
+.stat-card .k svg {
+  width: 34px; height: 34px; padding: 8px; border-radius: 11px; background: var(--brand-tint-2);
+  transition: transform .4s var(--ease), background .3s;
+}
+.stat-card:hover .k svg { transform: rotate(-8deg) scale(1.12); }
+.stat-card .v { font-size: 29px; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+.stat-card.brand { box-shadow: 0 18px 36px -18px rgba(107, 15, 53, .75); }
+.stat-card.brand::before { background: radial-gradient(240px circle at var(--mx, 50%) var(--my, 0%), rgba(255, 255, 255, .20), transparent 62%); }
+.stat-card.brand::after {
+  content: ""; position: absolute; width: 150px; height: 150px; right: -40px; top: -52px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(242, 194, 0, .38), rgba(242, 194, 0, 0) 68%);
+  animation: dashFloat 6s ease-in-out infinite; pointer-events: none;
+}
+.stat-card.brand .k svg { background: rgba(255, 255, 255, .16); }
+
+/* ---- panels, tables, lists ---- */
+.dash-main .panel {
+  border-radius: 20px; transition: box-shadow .3s var(--ease), border-color .3s var(--ease);
+}
+.dash-main .panel:hover { box-shadow: 0 16px 36px -22px rgba(107, 15, 53, .32); border-color: rgba(169, 45, 99, .16); }
+.dash-main .panel > h2, .dash-main .panel-head h2 { position: relative; padding-left: 14px; }
+.dash-main .panel > h2::before, .dash-main .panel-head h2::before {
+  content: ""; position: absolute; left: 0; top: 18%; bottom: 18%; width: 4px; border-radius: 4px;
+  background: linear-gradient(180deg, var(--brand), var(--gold));
+}
+table.data-table thead th { background: #faf6f3; font-size: 11.5px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+table.data-table tbody tr { transition: background .22s ease; }
+table.data-table tbody tr:hover { background: linear-gradient(90deg, var(--brand-tint), rgba(253, 245, 248, 0)); }
+table.data-table tbody tr td:first-child { transition: box-shadow .22s ease, padding-left .22s ease; }
+table.data-table tbody tr:hover td:first-child { box-shadow: inset 3px 0 0 var(--brand); }
+
+.dash-main .donations-list li { border-radius: 12px; padding: 13px 10px; transition: background .22s ease, transform .22s ease; }
+.dash-main .donations-list li:hover { background: var(--brand-tint); transform: translateX(3px); }
+.dash-main .donations-list .avatar { width: 40px; height: 40px; font-size: 13px; }
+
+.badge-pending_review::before, .badge-processing::before, .badge-pending::before, .badge-queued::before { animation: dashPulse 1.8s ease-out infinite; }
+.dash-main .empty-state svg { animation: dashFloat 4.5s ease-in-out infinite; }
+.dash-body .alert, .admin-body .alert { animation: dashRise .5s var(--ease) both; }
+
+.fr-mini { margin-top: 7px; min-width: 90px; }
+
+/* buttons: press + ripple (ripple element added by app.js) */
+.dash-main .btn, .dash-head .btn { position: relative; overflow: hidden; }
+.dash-main .btn:active { transform: translateY(0) scale(.97); }
+.dash-ripple {
+  position: absolute; width: 60px; height: 60px; margin: -30px 0 0 -30px; border-radius: 50%; pointer-events: none;
+  background: rgba(255, 255, 255, .45); transform: scale(0); animation: dashRipple .6s ease-out forwards;
+}
+.btn-light .dash-ripple, .btn-outline-brand .dash-ripple { background: rgba(169, 45, 99, .25); }
+
+/* thin loading bar shown when you click through the sidebar */
+.dash-loadbar { position: fixed; z-index: 9999; left: 0; top: 0; height: 3px; width: 0; pointer-events: none;
+  background: linear-gradient(90deg, var(--brand), var(--gold)); box-shadow: 0 0 10px rgba(169, 45, 99, .55); }
+.dash-loadbar.go { animation: dashLoad 2.4s cubic-bezier(.1, .6, .3, 1) forwards; }
+
+/* ---- scroll reveal (only active when app.js ran: html.dash-js) ---- */
+.dash-js .dr { opacity: 0; transform: translateY(22px); }
+.dash-js .dr.is-in { opacity: 1; transform: none; transition: opacity .7s var(--ease), transform .7s var(--ease); }
+.dash-js .dr.is-in tbody tr, .dash-js .dr.is-in .donations-list li {
+  animation: dashRow .5s var(--ease) both; animation-delay: calc(var(--r, 0) * 45ms + 160ms);
+}
+.dash-js .chart-bars.dr { transform: none; }
+.dash-js .chart-bars.dr .bar i { transform: scaleY(0); transform-origin: bottom; }
+.dash-js .chart-bars.dr .bar b, .dash-js .chart-bars.dr .bar span { opacity: 0; }
+.dash-js .chart-bars.dr.is-in .bar i { animation: dashGrow .95s var(--ease) both; animation-delay: calc(var(--b, 0) * 100ms + 120ms); transform: none; }
+.dash-js .chart-bars.dr.is-in .bar b, .dash-js .chart-bars.dr.is-in .bar span {
+  opacity: 1; transition: opacity .5s ease; transition-delay: calc(var(--b, 0) * 100ms + 600ms);
+}
+.chart-bars .bar i { transition: filter .25s ease, transform .25s ease; }
+.chart-bars .bar:hover i { filter: brightness(1.12) saturate(1.1); }
+
+@media (max-width: 1024px) {
+  .dash-nav a:hover { transform: none; }
+  .dash-nav a { animation-delay: calc(var(--i, 0) * 20ms); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dash-js .dr, .dash-js .chart-bars.dr .bar i, .dash-js .chart-bars.dr .bar b, .dash-js .chart-bars.dr .bar span { opacity: 1; transform: none; }
+  .dash-side-head::before, .dash-side-head::after, .stat-card.brand::after, .dash-main .empty-state svg { animation: none; }
+}

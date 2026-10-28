@@ -398,6 +398,253 @@
     });
   }
 
+  /* ---------- Fundraiser form (counters, quick picks, cover preview) ---------- */
+  function initFundraiserForm() {
+    var form = document.querySelector(".fr-form");
+    if (!form) { return; }
+
+    // Live character counters.
+    form.querySelectorAll("[data-count-for]").forEach(function (counter) {
+      var input = document.getElementById(counter.getAttribute("data-count-for"));
+      if (!input) { return; }
+      var min = parseInt(counter.getAttribute("data-min") || "0", 10);
+      var max = parseInt(counter.getAttribute("data-max") || "0", 10);
+      function update() {
+        var len = input.value.length;
+        if (min > 0 && len < min) {
+          counter.textContent = len + " / " + min + " minimum";
+          counter.className = "fr-count" + (len > 0 ? " is-warn" : "");
+        } else {
+          counter.textContent = len + (max ? " / " + max.toLocaleString() : "");
+          counter.className = "fr-count" + (len > 0 ? " is-ok" : "");
+        }
+      }
+      input.addEventListener("input", update);
+      update();
+    });
+
+    // Goal quick picks and the "Rs 50,000" preview.
+    var goal = document.getElementById("goal");
+    var preview = document.getElementById("goalPreview");
+    var goalChips = form.querySelectorAll("[data-goal]");
+    function updateGoal() {
+      if (!goal) { return; }
+      var value = parseFloat(goal.value);
+      if (preview) {
+        preview.textContent = value > 0 ? "Rs " + Math.round(value).toLocaleString("en-US") : "";
+      }
+      goalChips.forEach(function (chip) {
+        chip.classList.toggle("is-active", parseFloat(chip.getAttribute("data-goal")) === value);
+      });
+    }
+    goalChips.forEach(function (chip) {
+      chip.addEventListener("click", function () {
+        goal.value = chip.getAttribute("data-goal");
+        updateGoal();
+        goal.focus();
+      });
+    });
+    if (goal) { goal.addEventListener("input", updateGoal); updateGoal(); }
+
+    // End date quick picks.
+    var endAt = document.getElementById("end_at");
+    var dayChips = form.querySelectorAll("[data-days]");
+    function pad(n) { return n < 10 ? "0" + n : String(n); }
+    function isoIn(days) {
+      var d = new Date();
+      d.setDate(d.getDate() + days);
+      return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+    }
+    function updateDays() {
+      dayChips.forEach(function (chip) {
+        var days = parseInt(chip.getAttribute("data-days"), 10);
+        var on = days === 0 ? endAt.value === "" : endAt.value === isoIn(days);
+        chip.classList.toggle("is-active", on);
+      });
+    }
+    if (endAt) {
+      dayChips.forEach(function (chip) {
+        chip.addEventListener("click", function () {
+          var days = parseInt(chip.getAttribute("data-days"), 10);
+          endAt.value = days === 0 ? "" : isoIn(days);
+          updateDays();
+        });
+      });
+      endAt.addEventListener("input", updateDays);
+      updateDays();
+    }
+
+    // Cover photo: preview and a friendly size/type check before upload.
+    var fileInput = document.getElementById("cover_image");
+    var drop = document.getElementById("coverDrop");
+    var img = document.getElementById("coverPreview");
+    var err = document.getElementById("coverError");
+    var maxBytes = parseInt(form.getAttribute("data-max-upload") || "0", 10);
+    if (fileInput && drop && img) {
+      fileInput.addEventListener("change", function () {
+        var file = fileInput.files && fileInput.files[0];
+        if (err) { err.hidden = true; err.textContent = ""; }
+        if (!file) { return; }
+        var okType = /^image\/(jpeg|png|webp)$/.test(file.type);
+        if (!okType || (maxBytes && file.size > maxBytes)) {
+          fileInput.value = "";
+          if (err) {
+            err.textContent = !okType ? "Please choose a JPG, PNG or WebP image."
+              : "That photo is too large. Please choose one under " + Math.round(maxBytes / 1048576) + " MB.";
+            err.hidden = false;
+          }
+          return;
+        }
+        var reader = new FileReader();
+        reader.onload = function (ev) {
+          img.src = ev.target.result;
+          img.hidden = false;
+          drop.classList.add("has-image");
+        };
+        reader.readAsDataURL(file);
+      });
+      ["dragenter", "dragover"].forEach(function (name) {
+        drop.addEventListener(name, function () { drop.classList.add("is-drag"); });
+      });
+      ["dragleave", "drop"].forEach(function (name) {
+        drop.addEventListener(name, function () { drop.classList.remove("is-drag"); });
+      });
+    }
+
+    // Stop double submissions.
+    var submit = document.getElementById("frSubmit");
+    form.addEventListener("submit", function () {
+      if (submit) { setTimeout(function () { submit.classList.add("is-busy"); }, 0); }
+    });
+  }
+
+  /* ---------- Dashboard motion (user dashboard + admin) ---------- */
+  function initDashboardFX() {
+    var body = document.body;
+    if (!body || !(body.classList.contains("dash-body") || body.classList.contains("admin-body"))) { return; }
+
+    var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    // Time-of-day greeting (uses the visitor's own clock).
+    document.querySelectorAll("[data-greeting]").forEach(function (el) {
+      var h = new Date().getHours();
+      el.textContent = h < 5 ? "Working late" : h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+    });
+
+    // Stagger indexes for the sidebar and cards; cursor glow on cards.
+    document.querySelectorAll(".dash-nav a").forEach(function (a, i) { a.style.setProperty("--i", i); });
+    document.querySelectorAll(".stat-card").forEach(function (card, i) {
+      card.style.setProperty("--i", i);
+      card.addEventListener("mousemove", function (ev) {
+        var r = card.getBoundingClientRect();
+        card.style.setProperty("--mx", (ev.clientX - r.left) + "px");
+        card.style.setProperty("--my", (ev.clientY - r.top) + "px");
+      });
+    });
+
+    // Count-up for the big numbers: "Rs 1,250,000", "42", "Rs 1.2M" ...
+    function countUp(el, delay) {
+      var original = el.textContent;
+      var m = original.match(/\d[\d,]*(?:\.\d+)?/);
+      if (!m || reduce) { return; }
+      var raw = m[0];
+      var target = parseFloat(raw.replace(/,/g, ""));
+      if (!isFinite(target) || target <= 0) { return; }
+      var decimals = (raw.split(".")[1] || "").length;
+      var grouped = raw.indexOf(",") > -1;
+      var pre = original.slice(0, m.index);
+      var post = original.slice(m.index + raw.length);
+      var duration = 1400;
+      var start = null;
+      function fmt(v) {
+        return grouped
+          ? v.toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
+          : v.toFixed(decimals);
+      }
+      el.textContent = pre + fmt(0) + post;
+      function step(ts) {
+        if (start === null) { start = ts; }
+        var t = Math.min(1, (ts - start) / duration);
+        var eased = 1 - Math.pow(1 - t, 4);
+        el.textContent = t < 1 ? pre + fmt(target * eased) + post : original;
+        if (t < 1) { window.requestAnimationFrame(step); }
+      }
+      window.setTimeout(function () { window.requestAnimationFrame(step); }, delay);
+    }
+    document.querySelectorAll(".stat-card .v").forEach(function (el, i) { countUp(el, 200 + i * 85); });
+
+    // Scroll reveal for panels, charts and lists, with row/bar stagger.
+    var targets = document.querySelectorAll(".dash-main .panel, .dash-main .chart-bars, .dash-main .grid-2 > *, .dash-main .grid-3 > *");
+    if (!targets.length) { return; }
+    document.documentElement.classList.add("dash-js");
+
+    targets.forEach(function (el) {
+      el.classList.add("dr");
+      el.querySelectorAll("tbody tr, .donations-list li").forEach(function (row, i) {
+        row.style.setProperty("--r", Math.min(i, 12));
+      });
+      el.querySelectorAll(".bar").forEach(function (bar, i) { bar.style.setProperty("--b", i); });
+    });
+
+    function show(el) { el.classList.add("is-in"); }
+
+    if (!("IntersectionObserver" in window) || reduce) {
+      targets.forEach(show);
+      return;
+    }
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) { show(entry.target); io.unobserve(entry.target); }
+      });
+    }, { threshold: 0, rootMargin: "0px 0px -6% 0px" });
+    targets.forEach(function (el) { io.observe(el); });
+
+    // Safety net: never leave content hidden if the observer is slow.
+    window.setTimeout(function () {
+      targets.forEach(function (el) {
+        var r = el.getBoundingClientRect();
+        if (r.top < window.innerHeight && !el.classList.contains("is-in")) { show(el); }
+      });
+    }, 1500);
+  }
+
+  /* Button ripple + slim loading bar when clicking through the sidebar. */
+  function initDashboardClicks() {
+    var body = document.body;
+    if (!body || !(body.classList.contains("dash-body") || body.classList.contains("admin-body"))) { return; }
+
+    document.addEventListener("click", function (ev) {
+      var btn = ev.target.closest && ev.target.closest(".dash-main .btn, .dash-head .btn");
+      if (!btn) { return; }
+      var r = btn.getBoundingClientRect();
+      var dot = document.createElement("span");
+      dot.className = "dash-ripple";
+      dot.style.left = (ev.clientX - r.left) + "px";
+      dot.style.top = (ev.clientY - r.top) + "px";
+      btn.appendChild(dot);
+      window.setTimeout(function () { if (dot.parentNode) { dot.parentNode.removeChild(dot); } }, 650);
+    });
+
+    var bar = document.createElement("div");
+    bar.className = "dash-loadbar";
+    body.appendChild(bar);
+    var main = document.querySelector(".dash-main");
+    document.querySelectorAll(".dash-nav a[href]").forEach(function (a) {
+      a.addEventListener("click", function (ev) {
+        if (ev.defaultPrevented || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.button !== 0) { return; }
+        var href = a.getAttribute("href") || "";
+        if (href === "" || href.charAt(0) === "#" || a.target === "_blank") { return; }
+        bar.classList.add("go");
+        if (main) { main.classList.add("is-leaving"); }
+      });
+    });
+    // Coming back with the browser's Back button must not show a half-faded page.
+    window.addEventListener("pageshow", function () {
+      bar.classList.remove("go");
+      if (main) { main.classList.remove("is-leaving"); }
+    });
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     initNav();
     initStickyHeader();
@@ -415,5 +662,8 @@
     initBrandingPreviews();
     initRepeaters();
     initPrint();
+    initFundraiserForm();
+    initDashboardFX();
+    initDashboardClicks();
   });
 })();
