@@ -440,11 +440,17 @@ final class FundraiserController extends Controller
             'story'                => trim((string) $request->input('story')),
             'impact_statement'     => $request->input('impact_statement'),
             'category_id'          => (int) $request->input('category_id'),
-            'campaign_id'          => (int) $request->input('campaign_id', 0),
             'goal_minor'           => $goalMinor,
             'end_at'               => $request->input('end_at') ?: null,
             'submit_for_review'    => (bool) $request->input('submit_for_review'),
         ];
+
+        // The form no longer has a campaign picker. Only a campaign that the
+        // request really carries is passed on, so editing a fundraiser that
+        // an admin linked to a campaign never silently unlinks it.
+        if ($request->input('campaign_id') !== null) {
+            $data['campaign_id'] = (int) $request->input('campaign_id', 0);
+        }
 
         return $data;
     }

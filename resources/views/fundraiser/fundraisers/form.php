@@ -47,134 +47,206 @@ $cover = $isEdit && !empty($fundraiser['cover_image_path']) ? base_url((string) 
   </div>
 <?php endif; ?>
 
-<form method="post" action="<?= e($action) ?>" enctype="multipart/form-data" class="panel" novalidate>
+<?php
+// Quick-pick goal amounts, limited to what this site allows.
+$goalFloorRs = (int) ($goalFloor / 100);
+$goalCeilingRs = (int) ($goalCeiling / 100);
+$goalPresets = array_values(array_filter(
+    [25000, 50000, 100000, 250000, 500000],
+    static fn (int $rs): bool => $rs >= $goalFloorRs && $rs <= $goalCeilingRs
+));
+$maxUpload = (int) config('security.uploads.max_bytes', 4194304);
+$canSubmitForReview = !$isEdit || in_array($status, ['draft', 'changes_requested'], true);
+$tick = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
+?>
+<form method="post" action="<?= e($action) ?>" enctype="multipart/form-data" class="fr-form" novalidate
+      data-max-upload="<?= e((string) $maxUpload) ?>">
   <?= csrf_field() ?>
+  <?php
+  // The campaign picker was removed from this form. A link such as
+  // /dashboard/fundraisers/create?campaign=3 (from a campaign page) still
+  // carries its campaign through, quietly, on a brand-new fundraiser.
+  if (!$isEdit && !empty($preselectCampaign) && ctype_digit((string) $preselectCampaign)): ?>
+    <input type="hidden" name="campaign_id" value="<?= e((string) $preselectCampaign) ?>">
+  <?php endif; ?>
 
-  <fieldset>
-    <legend>Your story</legend>
+  <div class="fr-layout">
+    <div class="fr-main">
 
-    <div class="field <?= error_for('title') !== '' ? 'is-invalid' : '' ?>">
-      <label for="title">Fundraiser title<span class="req">*</span></label>
-      <input class="input" type="text" id="title" name="title" required minlength="5" maxlength="150"
-             value="<?= old('title', $isEdit ? (string) $fundraiser['title'] : '') ?>"
-             placeholder="Ayesha's Birthday for 50 Ration Packs">
-      <span class="form-help">A clear, personal title works best. 5–150 characters.</span>
-      <?php if (error_for('title') !== ''): ?><span class="field-error"><?= error_for('title') ?></span><?php endif; ?>
-    </div>
+      <!-- 1 · STORY -->
+      <section class="fr-card">
+        <header class="fr-card-head">
+          <span class="fr-step">1</span>
+          <div>
+            <h2>Tell your story</h2>
+            <p>People give to people. Say who you are helping and why it matters to you.</p>
+          </div>
+        </header>
 
-    <div class="field <?= error_for('story') !== '' ? 'is-invalid' : '' ?>">
-      <label for="story">Your story<span class="req">*</span></label>
-      <textarea class="textarea" id="story" name="story" rows="10" required minlength="50" maxlength="20000"
-                placeholder="Why are you doing this, who are you helping, and what will the money do?"><?= old('story', $isEdit ? (string) $fundraiser['story'] : '') ?></textarea>
-      <span class="form-help">At least 50 characters. Share the reason behind your fundraiser — donors give to people.</span>
-      <?php if (error_for('story') !== ''): ?><span class="field-error"><?= error_for('story') ?></span><?php endif; ?>
-    </div>
-
-    <div class="field">
-      <label for="impact_statement">What your supporters are funding</label>
-      <input class="input" type="text" id="impact_statement" name="impact_statement" maxlength="180"
-             value="<?= old('impact_statement', $isEdit ? (string) ($fundraiser['impact_statement'] ?? '') : '') ?>"
-             placeholder="Rs 5,000 feeds a child for a month">
-      <span class="form-help">One short line (up to 180 characters) shown on your card and page. Optional but it helps a lot.</span>
-      <?php if (error_for('impact_statement') !== ''): ?><span class="field-error"><?= error_for('impact_statement') ?></span><?php endif; ?>
-    </div>
-  </fieldset>
-
-  <fieldset>
-    <legend>Cause and campaign</legend>
-
-    <div class="form-row">
-      <div class="field <?= error_for('category_id') !== '' ? 'is-invalid' : '' ?>">
-        <label for="category_id">Cause<span class="req">*</span></label>
-        <select class="select-field" id="category_id" name="category_id" required>
-          <option value="">Choose a cause</option>
-          <?php foreach ($categories as $category): ?>
-            <option value="<?= e((string) $category['id']) ?>"
-              <?= (string) old('category_id', $isEdit ? (string) $fundraiser['category_id'] : '') === (string) $category['id'] ? 'selected' : '' ?>>
-              <?= e((string) $category['name']) ?>
-            </option>
-          <?php endforeach; ?>
-        </select>
-        <?php if (error_for('category_id') !== ''): ?><span class="field-error"><?= error_for('category_id') ?></span><?php endif; ?>
-      </div>
-
-      <div class="field">
-        <label for="campaign_id">Campaign (optional)</label>
-        <select class="select-field" id="campaign_id" name="campaign_id">
-          <option value="">No campaign</option>
-          <?php foreach ($campaigns as $campaign): ?>
-            <option value="<?= e((string) $campaign['id']) ?>"
-              <?= (string) old('campaign_id', $isEdit ? (string) ($fundraiser['campaign_id'] ?? '') : (string) $preselectCampaign) === (string) $campaign['id'] ? 'selected' : '' ?>>
-              <?= e((string) $campaign['title']) ?>
-            </option>
-          <?php endforeach; ?>
-        </select>
-        <span class="form-help">Linking to a campaign puts your page in front of people browsing that appeal.</span>
-        <?php if (error_for('campaign_id') !== ''): ?><span class="field-error"><?= error_for('campaign_id') ?></span><?php endif; ?>
-      </div>
-    </div>
-  </fieldset>
-
-  <fieldset>
-    <legend>Goal and dates</legend>
-
-    <div class="form-row">
-      <div class="field <?= error_for('goal') !== '' ? 'is-invalid' : '' ?>">
-        <label for="goal">Fundraising goal (PKR)<span class="req">*</span></label>
-        <div class="input-group">
-          <span class="prefix">Rs</span>
-          <input class="input" type="number" id="goal" name="goal" required step="100"
-                 min="<?= e((string) (int) ($goalFloor / 100)) ?>" max="<?= e((string) (int) ($goalCeiling / 100)) ?>"
-                 value="<?= old('goal', $isEdit ? number_format($goalMinor / 100, 0, '.', '') : '') ?>">
+        <div class="field <?= error_for('title') !== '' ? 'is-invalid' : '' ?>">
+          <label for="title">Fundraiser title<span class="req">*</span></label>
+          <input class="input" type="text" id="title" name="title" required minlength="5" maxlength="150"
+                 value="<?= old('title', $isEdit ? (string) $fundraiser['title'] : '') ?>"
+                 placeholder="Ayesha's Birthday for 50 Ration Packs" autocomplete="off">
+          <span class="form-help fr-help"><span>Short, clear and personal works best.</span><span class="fr-count" data-count-for="title" data-max="150"></span></span>
+          <?php if (error_for('title') !== ''): ?><span class="field-error"><?= error_for('title') ?></span><?php endif; ?>
         </div>
-        <span class="form-help">
-          Between <?= e(money($goalFloor)) ?> and <?= e(money($goalCeiling)) ?>.
-          <?php if ($isEdit && (string) $fundraiser['approval_status'] === 'approved'): ?>
-            Because this fundraiser is live, you cannot lower the goal below the amount already raised.
+
+        <div class="field <?= error_for('story') !== '' ? 'is-invalid' : '' ?>">
+          <label for="story">Your story<span class="req">*</span></label>
+          <textarea class="textarea" id="story" name="story" rows="9" required minlength="50" maxlength="20000"
+                    placeholder="Why are you doing this, who are you helping, and what will the money do?"><?= old('story', $isEdit ? (string) $fundraiser['story'] : '') ?></textarea>
+          <span class="form-help fr-help"><span>Write at least 50 characters. A few honest paragraphs beat a long essay.</span><span class="fr-count" data-count-for="story" data-min="50" data-max="20000"></span></span>
+          <?php if (error_for('story') !== ''): ?><span class="field-error"><?= error_for('story') ?></span><?php endif; ?>
+        </div>
+
+        <div class="field <?= error_for('impact_statement') !== '' ? 'is-invalid' : '' ?>">
+          <label for="impact_statement">What will the money do? <span class="fr-optional">Optional</span></label>
+          <input class="input" type="text" id="impact_statement" name="impact_statement" maxlength="180"
+                 value="<?= old('impact_statement', $isEdit ? (string) ($fundraiser['impact_statement'] ?? '') : '') ?>"
+                 placeholder="Rs 5,000 feeds a child for a month" autocomplete="off">
+          <span class="form-help fr-help"><span>One line shown on your card and page. It helps donors act.</span><span class="fr-count" data-count-for="impact_statement" data-max="180"></span></span>
+          <?php if (error_for('impact_statement') !== ''): ?><span class="field-error"><?= error_for('impact_statement') ?></span><?php endif; ?>
+        </div>
+      </section>
+
+      <!-- 2 · CAUSE -->
+      <section class="fr-card">
+        <header class="fr-card-head">
+          <span class="fr-step">2</span>
+          <div>
+            <h2>Choose a cause</h2>
+            <p>Your fundraiser is listed under this cause so the right supporters find it.</p>
+          </div>
+        </header>
+
+        <div class="field <?= error_for('category_id') !== '' ? 'is-invalid' : '' ?>">
+          <label for="category_id">Cause<span class="req">*</span></label>
+          <select class="select-field fr-select" id="category_id" name="category_id" required>
+            <option value="">Choose a cause</option>
+            <?php foreach ($categories as $category): ?>
+              <option value="<?= e((string) $category['id']) ?>"
+                <?= (string) old('category_id', $isEdit ? (string) $fundraiser['category_id'] : '') === (string) $category['id'] ? 'selected' : '' ?>>
+                <?= e((string) $category['name']) ?>
+              </option>
+            <?php endforeach; ?>
+          </select>
+          <?php if (error_for('category_id') !== ''): ?><span class="field-error"><?= error_for('category_id') ?></span><?php endif; ?>
+          <?php if (error_for('campaign_id') !== ''): ?><span class="field-error"><?= error_for('campaign_id') ?></span><?php endif; ?>
+        </div>
+      </section>
+
+      <!-- 3 · GOAL -->
+      <section class="fr-card">
+        <header class="fr-card-head">
+          <span class="fr-step">3</span>
+          <div>
+            <h2>Set your goal</h2>
+            <p>Pick an amount you can realistically reach, and how long you will run.</p>
+          </div>
+        </header>
+
+        <div class="field <?= error_for('goal') !== '' ? 'is-invalid' : '' ?>">
+          <label for="goal">Fundraising goal (PKR)<span class="req">*</span></label>
+          <div class="input-group">
+            <span class="prefix">Rs</span>
+            <input class="input" type="number" inputmode="numeric" id="goal" name="goal" required step="100"
+                   min="<?= e((string) $goalFloorRs) ?>" max="<?= e((string) $goalCeilingRs) ?>"
+                   value="<?= old('goal', $isEdit ? number_format($goalMinor / 100, 0, '.', '') : '') ?>"
+                   placeholder="50000">
+          </div>
+          <?php if ($goalPresets !== []): ?>
+            <div class="fr-chips" role="group" aria-label="Quick goal amounts">
+              <?php foreach ($goalPresets as $rs): ?>
+                <button type="button" class="fr-chip" data-goal="<?= e((string) $rs) ?>">Rs <?= e(number_format($rs)) ?></button>
+              <?php endforeach; ?>
+            </div>
           <?php endif; ?>
-        </span>
-        <?php if (error_for('goal') !== ''): ?><span class="field-error"><?= error_for('goal') ?></span><?php endif; ?>
+          <span class="form-help fr-help">
+            <span>
+              Between <?= e(money($goalFloor)) ?> and <?= e(money($goalCeiling)) ?>.
+              <?php if ($isEdit && (string) $fundraiser['approval_status'] === 'approved'): ?>
+                This fundraiser is live, so the goal cannot go below what is already raised.
+              <?php endif; ?>
+            </span>
+            <span class="fr-goal-preview" id="goalPreview" aria-live="polite"></span>
+          </span>
+          <?php if (error_for('goal') !== ''): ?><span class="field-error"><?= error_for('goal') ?></span><?php endif; ?>
+        </div>
+
+        <div class="field <?= error_for('end_at') !== '' ? 'is-invalid' : '' ?>">
+          <label for="end_at">End date <span class="fr-optional">Optional</span></label>
+          <input class="input" type="date" id="end_at" name="end_at"
+                 value="<?= old('end_at', $isEdit && !empty($fundraiser['end_at']) ? substr((string) $fundraiser['end_at'], 0, 10) : (string) ($defaultEnd ?? '')) ?>">
+          <div class="fr-chips" role="group" aria-label="Quick end dates">
+            <button type="button" class="fr-chip" data-days="30">30 days</button>
+            <button type="button" class="fr-chip" data-days="60">60 days</button>
+            <button type="button" class="fr-chip" data-days="90">90 days</button>
+            <button type="button" class="fr-chip fr-chip-ghost" data-days="0">No end date</button>
+          </div>
+          <span class="form-help">Fundraisers with a deadline raise money faster. Leave blank to keep it open.</span>
+          <?php if (error_for('end_at') !== ''): ?><span class="field-error"><?= error_for('end_at') ?></span><?php endif; ?>
+        </div>
+      </section>
+
+      <!-- 4 · COVER -->
+      <section class="fr-card">
+        <header class="fr-card-head">
+          <span class="fr-step">4</span>
+          <div>
+            <h2>Add a cover photo</h2>
+            <p>A real, bright photo of the people you are helping earns the most trust.</p>
+          </div>
+        </header>
+
+        <div class="field <?= error_for('cover_image') !== '' ? 'is-invalid' : '' ?>">
+          <label class="fr-drop<?= $cover !== null ? ' has-image' : '' ?>" for="cover_image" id="coverDrop">
+            <input type="file" id="cover_image" name="cover_image" accept="image/jpeg,image/png,image/webp">
+            <img class="fr-drop-preview" id="coverPreview" alt="Cover image preview"
+                 <?= $cover !== null ? 'src="' . e($cover) . '"' : 'hidden' ?>>
+            <span class="fr-drop-empty">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5-5-8 9"/></svg>
+              <b>Click to choose a photo</b>
+              <small>JPG, PNG or WebP, up to <?= e(app(\App\Services\UploadService::class)->humanBytes($maxUpload)) ?></small>
+            </span>
+            <span class="fr-drop-change"><?= $cover !== null ? 'Replace photo' : 'Change photo' ?></span>
+          </label>
+          <span class="field-error" id="coverError" hidden></span>
+          <?php if ($cover !== null): ?><span class="form-help">Choosing a new photo replaces the current one.</span><?php endif; ?>
+          <?php if (error_for('cover_image') !== ''): ?><span class="field-error"><?= error_for('cover_image') ?></span><?php endif; ?>
+        </div>
+      </section>
+
+    </div>
+
+    <aside class="fr-side">
+      <div class="fr-card fr-actions-card">
+        <h3><?= $isEdit ? 'Save your changes' : 'Ready when you are' ?></h3>
+        <p class="fr-side-sub"><?= $isEdit ? 'Your changes are saved to this page.' : 'Save a draft now and finish later. Nothing goes live until our team approves it.' ?></p>
+
+        <?php if ($canSubmitForReview): ?>
+          <label class="fr-review">
+            <input type="checkbox" name="submit_for_review" value="1" <?= old('submit_for_review', '') !== '' ? 'checked' : '' ?>>
+            <span><b>Submit for review now</b><small>Our team usually replies within one working day.</small></span>
+          </label>
+        <?php endif; ?>
+
+        <button class="btn btn-brand btn-lg btn-block" type="submit" id="frSubmit"><?= $isEdit ? 'Save changes' : 'Save draft' ?></button>
+        <?php if ($isEdit): ?>
+          <a class="btn btn-light btn-lg btn-block" href="<?= e(base_url('dashboard/fundraisers')) ?>">Done</a>
+        <?php endif; ?>
       </div>
 
-      <div class="field">
-        <label for="end_at">End date (optional)</label>
-        <input class="input" type="date" id="end_at" name="end_at"
-               value="<?= old('end_at', $isEdit && !empty($fundraiser['end_at']) ? substr((string) $fundraiser['end_at'], 0, 10) : (string) ($defaultEnd ?? '')) ?>">
-        <span class="form-help">Leave blank for an open-ended fundraiser.</span>
-        <?php if (error_for('end_at') !== ''): ?><span class="field-error"><?= error_for('end_at') ?></span><?php endif; ?>
+      <div class="fr-card fr-tips">
+        <h3>Tips for a page that gets funded</h3>
+        <ul>
+          <li><?= $tick ?><span>Start with a clear, personal title.</span></li>
+          <li><?= $tick ?><span>Explain exactly where the money goes.</span></li>
+          <li><?= $tick ?><span>Use a real photo, not a stock image.</span></li>
+          <li><?= $tick ?><span>Share it with ten people the day it goes live.</span></li>
+        </ul>
       </div>
-    </div>
-  </fieldset>
-
-  <fieldset>
-    <legend>Cover image</legend>
-
-    <div class="field <?= error_for('cover_image') !== '' ? 'is-invalid' : '' ?>">
-      <label for="cover_image">Upload a cover photo</label>
-      <input class="input" type="file" id="cover_image" name="cover_image" accept="image/jpeg,image/png,image/webp">
-      <span class="form-help">JPG, PNG or WebP, up to <?= e(app(\App\Services\UploadService::class)->humanBytes((int) config('security.uploads.max_bytes', 4194304))) ?>. A photo of the people you are helping works best.</span>
-      <?php if (error_for('cover_image') !== ''): ?><span class="field-error"><?= error_for('cover_image') ?></span><?php endif; ?>
-    </div>
-
-    <?php if ($cover !== null): ?>
-      <img src="<?= e($cover) ?>" alt="Current cover image" style="max-width:320px;border-radius:var(--radius);box-shadow:var(--shadow-sm)">
-      <p class="form-help">Uploading a new image replaces this one.</p>
-    <?php endif; ?>
-  </fieldset>
-
-  <div class="form-actions">
-    <button class="btn btn-brand btn-lg" type="submit"><?= $isEdit ? 'Save changes' : 'Save draft' ?></button>
-
-    <?php if (!$isEdit || in_array($status, ['draft', 'changes_requested'], true)): ?>
-      <label class="checkbox-row" style="margin:0">
-        <input type="checkbox" name="submit_for_review" value="1">
-        <span>Submit for review now</span>
-      </label>
-    <?php endif; ?>
-
-    <?php if ($isEdit): ?>
-      <a class="btn btn-light btn-lg" href="<?= e(base_url('dashboard/fundraisers')) ?>">Done</a>
-    <?php endif; ?>
+    </aside>
   </div>
 </form>
 
