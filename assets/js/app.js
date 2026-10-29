@@ -679,6 +679,73 @@
     window.addEventListener("scroll", function () { tip.classList.remove("on"); }, { passive: true });
   }
 
+  /* ---------- Payment result page: confetti, auto status check, print ---------- */
+  function initPaymentResult() {
+    var page = document.querySelector(".pr-page");
+    if (!page) { return; }
+    var outcome = page.getAttribute("data-pr") || "";
+    var ref = page.getAttribute("data-pr-ref") || "";
+    var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    page.querySelectorAll("[data-print]").forEach(function (btn) {
+      btn.addEventListener("click", function () { window.print(); });
+    });
+
+    function remembered(key, set) {
+      try {
+        if (set) { window.sessionStorage.setItem(key, set); return set; }
+        return window.sessionStorage.getItem(key);
+      } catch (e) { return null; }
+    }
+
+    // A short burst of confetti, once per donation per browser session.
+    if (outcome === "completed" && !reduce && !remembered("prConfetti:" + ref)) {
+      remembered("prConfetti:" + ref, "1");
+      var box = document.createElement("div");
+      box.className = "pr-confetti";
+      box.setAttribute("aria-hidden", "true");
+      var colours = ["#a92d63", "#f2c200", "#1e7a45", "#c4386f", "#3b4b86", "#ffffff"];
+      for (var i = 0; i < 80; i++) {
+        var bit = document.createElement("span");
+        bit.style.left = (Math.random() * 100) + "%";
+        bit.style.setProperty("--c", colours[i % colours.length]);
+        bit.style.setProperty("--w", (6 + Math.random() * 7) + "px");
+        bit.style.setProperty("--h", (9 + Math.random() * 11) + "px");
+        bit.style.setProperty("--dx", ((Math.random() - 0.5) * 220) + "px");
+        bit.style.setProperty("--rot", (360 + Math.random() * 720) + "deg");
+        bit.style.setProperty("--d", (2.8 + Math.random() * 2.2) + "s");
+        bit.style.setProperty("--delay", (0.5 + Math.random() * 1.1) + "s");
+        box.appendChild(bit);
+      }
+      document.body.appendChild(box);
+      window.setTimeout(function () { if (box.parentNode) { box.parentNode.removeChild(box); } }, 6500);
+    }
+
+    // Still being confirmed: look again every 20 seconds (at most 12 times).
+    var pollUrl = page.getAttribute("data-pr-poll");
+    var counter = document.getElementById("prCountdown");
+    var line = document.getElementById("prPoll");
+    if (pollUrl && counter) {
+      var key = "prPolls:" + ref;
+      var tries = parseInt(remembered(key) || "0", 10);
+      if (tries >= 12) {
+        if (line) { line.textContent = "Still waiting for the bank. We will email you as soon as it confirms."; }
+        return;
+      }
+      var left = 20;
+      var timer = window.setInterval(function () {
+        if (document.hidden) { return; }             // do not count while the tab is in the background
+        left -= 1;
+        counter.textContent = String(Math.max(left, 0));
+        if (left <= 0) {
+          window.clearInterval(timer);
+          remembered(key, String(tries + 1));
+          window.location.href = pollUrl;
+        }
+      }, 1000);
+    }
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     initNav();
     initStickyHeader();
@@ -700,5 +767,6 @@
     initDashboardFX();
     initDashboardClicks();
     initCharts();
+    initPaymentResult();
   });
 })();
