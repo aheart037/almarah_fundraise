@@ -19,6 +19,10 @@
  * @var array $callbacks
  */
 
+require_once __DIR__ . '/../partials/charts.php';
+
+$trendMinor = (int) array_sum(array_column($trend ?? [], 'minor'));
+$trendCount = (int) array_sum(array_column($trend ?? [], 'count'));
 $completedMinor = (int) ($totals['completed_minor'] ?? 0);
 $completedCount = (int) ($totals['completed_count'] ?? 0);
 $maxMonth = 0;
@@ -79,6 +83,30 @@ foreach ($monthly as $row) {
   </div>
 </div>
 
+<div class="grid-chart">
+  <section class="panel">
+    <div class="ch-head">
+      <div>
+        <h2>Donations, last 30 days</h2>
+        <p class="panel-sub">Confirmed payments per day.</p>
+      </div>
+      <div class="ch-kpi">
+        <b><?= e(money($trendMinor)) ?></b>
+        <small><?= e(number_format($trendCount)) ?> donation<?= $trendCount === 1 ? '' : 's' ?></small>
+        <?= ch_delta($trendMinor, (int) ($trendPrevMinor ?? 0)) ?>
+      </div>
+    </div>
+    <?= ch_area($trend ?? [], 'admin') ?>
+  </section>
+
+  <section class="panel">
+    <h2>Payment outcomes</h2>
+    <p class="panel-sub">How every attempted donation ended.</p>
+    <?php $mixSlices = ch_status_slices($statusMix ?? []); $mixTotal = (int) array_sum(array_column($mixSlices, 'value')); ?>
+    <?= ch_donut($mixSlices, number_format($mixTotal), 'attempts') ?>
+  </section>
+</div>
+
 <div class="grid-2">
   <section class="panel">
     <h2>Confirmed donations by month</h2>
@@ -129,6 +157,49 @@ foreach ($monthly as $row) {
       </table>
     </div>
     <p class="mt-2"><a class="link-arrow" href="<?= e(base_url('admin/settings')) ?>">Payment settings</a></p>
+  </section>
+</div>
+
+<div class="grid-chart grid-chart-rev">
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Top fundraisers</h2>
+      <a class="link-arrow" href="<?= e(base_url('admin/fundraisers')) ?>">View all</a>
+    </div>
+    <p class="panel-sub">Most raised so far, as a share of their goal.</p>
+    <?php
+    $topRows = [];
+    foreach (($topFundraisers ?? []) as $row) {
+        $goal = (int) ($row['goal_minor'] ?? 0);
+        $raised = (int) ($row['raised_minor'] ?? 0);
+        $topRows[] = [
+            'label' => (string) $row['title'],
+            'pct'   => $goal > 0 ? min(100, $raised / $goal * 100) : 0,
+            'right' => money_short($raised),
+            'sub'   => ($goal > 0 ? (int) round($raised / $goal * 100) . '% of ' . money_short($goal) : 'No goal set')
+                . ' · ' . (int) ($row['donor_count'] ?? 0) . ' donor' . ((int) ($row['donor_count'] ?? 0) === 1 ? '' : 's'),
+        ];
+    }
+    ?>
+    <?= ch_hbars($topRows, 'Fundraisers appear here once they are live and receiving donations.') ?>
+  </section>
+
+  <section class="panel">
+    <h2>Share by payment method</h2>
+    <p class="panel-sub">Confirmed money per gateway.</p>
+    <?php
+    $gwColors = ['#a92d63', '#f2c200', '#3b4b86', '#1e7a45', '#8e8d8d'];
+    $gwSlices = [];
+    foreach (array_values($gatewayTotals) as $i => $row) {
+        $gwSlices[] = [
+            'label' => (string) $row['name'],
+            'value' => (int) $row['completed_minor'],
+            'color' => $gwColors[$i % count($gwColors)],
+            'text'  => money_short((int) $row['completed_minor']),
+        ];
+    }
+    ?>
+    <?= ch_donut($gwSlices, money_short($completedMinor), 'confirmed') ?>
   </section>
 </div>
 

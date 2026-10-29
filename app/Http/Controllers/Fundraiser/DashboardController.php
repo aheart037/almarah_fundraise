@@ -71,7 +71,40 @@ final class DashboardController extends Controller
             return in_array($status, ['draft', 'changes_requested', 'rejected'], true);
         }));
 
+        // Chart data (v18); guarded so the overview always opens.
+        try {
+            $daily = chart_fill_days($this->db->select(
+                "SELECT DATE(COALESCE(d.completed_at, d.created_at)) AS day,
+                        COALESCE(SUM(d.amount_minor), 0) AS minor, COUNT(*) AS cnt
+                 FROM donations d
+                 JOIN fundraisers f ON f.id = d.fundraiser_id
+                 WHERE f.owner_user_id = :uid AND f.deleted_at IS NULL AND d.status = 'completed'
+                   AND COALESCE(d.completed_at, d.created_at) >= DATE_SUB(UTC_DATE(), INTERVAL 59 DAY)
+                 GROUP BY day",
+                ['uid' => $userId]
+            ), 60);
+        } catch (\Throwable) {
+            $daily = chart_fill_days([], 60);
+        }
+
+        try {
+            $statusMix = $this->db->select(
+                "SELECT d.status, COUNT(*) AS c
+                 FROM donations d
+                 JOIN fundraisers f ON f.id = d.fundraiser_id
+                 WHERE f.owner_user_id = :uid AND f.deleted_at IS NULL
+                 GROUP BY d.status",
+                ['uid' => $userId]
+            );
+        } catch (\Throwable) {
+            $statusMix = [];
+        }
+
         return $this->render('fundraiser/dashboard', [
+            'trend'           => array_slice($daily, 30),
+            'trendPrevMinor'  => array_sum(array_column(array_slice($daily, 0, 30), 'minor')),
+            'trendPrevCount'  => array_sum(array_column(array_slice($daily, 0, 30), 'count')),
+            'statusMix'       => $statusMix,
             'pageTitle'       => 'Dashboard',
             'fundraisers'     => $own,
             'totals'          => $totals,

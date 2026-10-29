@@ -65,7 +65,41 @@ final class DashboardController extends Controller
              ORDER BY month ASC"
         );
 
+        // Chart data (v18). Each query is guarded: a problem here must never
+        // stop the overview from opening.
+        try {
+            $daily = chart_fill_days($this->db->select(
+                "SELECT DATE(COALESCE(completed_at, created_at)) AS day,
+                        COALESCE(SUM(amount_minor), 0) AS minor, COUNT(*) AS cnt
+                 FROM donations
+                 WHERE status = 'completed'
+                   AND COALESCE(completed_at, created_at) >= DATE_SUB(UTC_DATE(), INTERVAL 59 DAY)
+                 GROUP BY day"
+            ), 60);
+        } catch (\Throwable) {
+            $daily = chart_fill_days([], 60);
+        }
+        $trend = array_slice($daily, 30);
+        $trendPrev = array_slice($daily, 0, 30);
+
+        try {
+            $statusMix = $this->db->select('SELECT status, COUNT(*) AS c FROM donations GROUP BY status');
+        } catch (\Throwable) {
+            $statusMix = [];
+        }
+
+        try {
+            $topFundraisers = $this->fundraisers->topByRaised(5);
+        } catch (\Throwable) {
+            $topFundraisers = [];
+        }
+
         return $this->render('admin/dashboard', [
+            'trend'            => $trend,
+            'trendPrevMinor'   => array_sum(array_column($trendPrev, 'minor')),
+            'trendPrevCount'   => array_sum(array_column($trendPrev, 'count')),
+            'statusMix'        => $statusMix,
+            'topFundraisers'   => $topFundraisers,
             'pageTitle'        => 'Admin overview',
             'totals'           => $totals,
             'gatewayTotals'    => $gatewayTotals,

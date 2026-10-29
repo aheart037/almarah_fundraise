@@ -11,6 +11,10 @@
  * @var bool $verified
  */
 
+require_once __DIR__ . '/../partials/charts.php';
+
+$trendMinor = (int) array_sum(array_column($trend ?? [], 'minor'));
+$trendCount = (int) array_sum(array_column($trend ?? [], 'count'));
 $canManagePages = can_fundraiser_capability('manage_pages');
 $canManageTeams = can_fundraiser_capability('manage_teams');
 $canPublishUpdates = can_fundraiser_capability('publish_updates');
@@ -84,6 +88,75 @@ foreach ($fundraisers as $row) {
       <div class="d">Teams you belong to</div>
     </div>
   <?php endif; ?>
+</div>
+
+<?php
+// Overall progress: live fundraisers only, so drafts do not drag the ring down.
+$liveGoal = 0; $liveRaised = 0; $progressRows = [];
+foreach ($fundraisers as $row) {
+    $goal = (int) $row['goal_minor'];
+    $raisedRow = (int) $row['raised_minor'];
+    if ((string) $row['status'] === 'published') {
+        $liveGoal += $goal;
+        $liveRaised += $raisedRow;
+    }
+    if ($goal > 0 && in_array((string) $row['status'], ['published', 'completed', 'paused'], true)) {
+        $progressRows[] = [
+            'label' => (string) $row['title'],
+            'pct'   => min(100, $raisedRow / $goal * 100),
+            'right' => (int) round($raisedRow / $goal * 100) . '%',
+            'sub'   => money_short($raisedRow) . ' of ' . money_short($goal),
+            '_raised' => $raisedRow,
+        ];
+    }
+}
+usort($progressRows, static fn (array $a, array $b): int => $b['_raised'] <=> $a['_raised']);
+$progressRows = array_slice($progressRows, 0, 6);
+$livePct = $liveGoal > 0 ? $liveRaised / $liveGoal * 100 : 0;
+?>
+<div class="grid-chart">
+  <section class="panel">
+    <div class="ch-head">
+      <div>
+        <h2>Your donations, last 30 days</h2>
+        <p class="panel-sub">Confirmed donations to your fundraisers, per day.</p>
+      </div>
+      <div class="ch-kpi">
+        <b><?= e(money($trendMinor)) ?></b>
+        <small><?= e(number_format($trendCount)) ?> donation<?= $trendCount === 1 ? '' : 's' ?></small>
+        <?= ch_delta($trendMinor, (int) ($trendPrevMinor ?? 0)) ?>
+      </div>
+    </div>
+    <?= ch_area($trend ?? [], 'user') ?>
+  </section>
+
+  <section class="panel">
+    <h2>Goal progress</h2>
+    <p class="panel-sub">Raised so far across your live fundraisers.</p>
+    <?php if ($liveGoal > 0): ?>
+      <?= ch_gauge($livePct, 'of your goals', money_short($liveRaised) . ' raised of ' . money_short($liveGoal)) ?>
+    <?php else: ?>
+      <?= ch_hbars([], 'Publish a fundraiser with a goal and your progress ring appears here.') ?>
+    <?php endif; ?>
+  </section>
+</div>
+
+<div class="grid-chart grid-chart-rev">
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Progress by fundraiser</h2>
+      <a class="link-arrow" href="<?= e(base_url('dashboard/fundraisers')) ?>">View all</a>
+    </div>
+    <p class="panel-sub">How close each live page is to its goal.</p>
+    <?= ch_hbars($progressRows, 'Your live fundraisers and how close they are to their goals will show here.') ?>
+  </section>
+
+  <section class="panel">
+    <h2>Donation outcomes</h2>
+    <p class="panel-sub">What happened to every donation attempt.</p>
+    <?php $mixSlices = ch_status_slices($statusMix ?? []); $mixTotal = (int) array_sum(array_column($mixSlices, 'value')); ?>
+    <?= ch_donut($mixSlices, number_format($mixTotal), 'attempts') ?>
+  </section>
 </div>
 
 <?php if ($needsAttention !== [] && $canManagePages): ?>

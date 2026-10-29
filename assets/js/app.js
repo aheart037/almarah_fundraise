@@ -645,6 +645,40 @@
     });
   }
 
+  /* ---------- Chart tooltips (charts are drawn in PHP; see partials/charts.php) ---------- */
+  function initCharts() {
+    var targets = document.querySelectorAll(".ch-wrap, .ch-donut, .ch-hbars");
+    if (!targets.length) { return; }
+
+    var tip = document.createElement("div");
+    tip.className = "ch-tip";
+    tip.setAttribute("role", "tooltip");
+    document.body.appendChild(tip);
+
+    function place(ev) {
+      var pad = 14;
+      var w = tip.offsetWidth, h = tip.offsetHeight;
+      var x = ev.clientX + pad, y = ev.clientY - h - pad;
+      if (x + w > window.innerWidth - 8) { x = ev.clientX - w - pad; }
+      if (y < 8) { y = ev.clientY + pad; }
+      tip.style.left = Math.max(8, x) + "px";
+      tip.style.top = y + "px";
+    }
+    function show(ev) {
+      var el = ev.target.closest ? ev.target.closest("[data-tip]") : null;
+      if (!el) { tip.classList.remove("on"); return; }
+      tip.textContent = el.getAttribute("data-tip");
+      tip.classList.add("on");
+      place(ev);
+    }
+    targets.forEach(function (box) {
+      box.addEventListener("mousemove", show);
+      box.addEventListener("click", show);              // tap on touch screens
+      box.addEventListener("mouseleave", function () { tip.classList.remove("on"); });
+    });
+    window.addEventListener("scroll", function () { tip.classList.remove("on"); }, { passive: true });
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     initNav();
     initStickyHeader();
@@ -665,5 +699,6 @@
     initFundraiserForm();
     initDashboardFX();
     initDashboardClicks();
+    initCharts();
   });
 })();

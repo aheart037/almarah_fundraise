@@ -355,3 +355,39 @@ if (!function_exists('abort')) {
         throw new \App\Exceptions\HttpException($status, $message);
     }
 }
+
+if (!function_exists('chart_fill_days')) {
+    /**
+     * Turns "one row per day that had donations" into an unbroken list of the
+     * last $days days (oldest first, ending today in UTC), with zeros for the
+     * quiet days, so a chart has no gaps.
+     *
+     * @param array<int,array<string,mixed>> $rows each with day (Y-m-d), minor, cnt
+     * @return array<int,array{day:string,label:string,minor:int,count:int}>
+     */
+    function chart_fill_days(array $rows, int $days = 30): array
+    {
+        $byDay = [];
+        foreach ($rows as $row) {
+            $byDay[(string) ($row['day'] ?? '')] = [
+                'minor' => (int) ($row['minor'] ?? 0),
+                'count' => (int) ($row['cnt'] ?? 0),
+            ];
+        }
+
+        $out = [];
+        $today = (int) strtotime(gmdate('Y-m-d') . ' 00:00:00 UTC');
+        for ($i = $days - 1; $i >= 0; $i--) {
+            $ts = $today - $i * 86400;
+            $key = gmdate('Y-m-d', $ts);
+            $out[] = [
+                'day'   => $key,
+                'label' => gmdate('j M', $ts),
+                'minor' => $byDay[$key]['minor'] ?? 0,
+                'count' => $byDay[$key]['count'] ?? 0,
+            ];
+        }
+
+        return $out;
+    }
+}
