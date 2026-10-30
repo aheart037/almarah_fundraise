@@ -124,9 +124,9 @@ final class PaymentController extends Controller
         }
 
         $titles = [
-            'completed'  => 'Payment successful',
+            'completed'  => 'Payment Successful',
             'processing' => 'Payment being confirmed',
-            'failed'     => 'Payment not completed',
+            'failed'     => 'Payment Failed',
         ];
 
         $response = $this->render('public/donate/response', [
@@ -135,6 +135,7 @@ final class PaymentController extends Controller
             'reason'     => $reason,
             'reference'  => $reference,
             'donation'   => $donation,
+            'transactions' => $donation !== null ? $this->payments->forDonation((int) $donation['id']) : [],
             'amountText' => $donation !== null
                 ? Money::format((int) $donation['amount_minor'], (string) ($donation['currency'] ?? 'PKR'))
                 : '',
@@ -195,7 +196,7 @@ final class PaymentController extends Controller
             // back. This never authorises a status change on its own: it only
             // identifies the transaction whose state we then re-derive.
             $candidates = [];
-            foreach (['merchant_order_id', 'orderNumber', 'OrderID', 'orderId', 'TransactionID', 'transactionId'] as $key) {
+            foreach (['merchant_order_id', 'orderNumber', 'OrderID', 'orderId', 'TransactionID', 'transactionId', 'transaction_id'] as $key) {
                 $value = $payload[$key] ?? '';
                 if (!is_string($value) && !is_int($value) && !is_float($value)) {
                     continue;
@@ -211,7 +212,7 @@ final class PaymentController extends Controller
             // itself: anyone could type ?OrderID=0001. It only counts when the
             // request also carries the bank's own id for that same payment.
             $bankIds = [];
-            foreach (['TransactionID', 'transactionId', 'orderId'] as $bankKey) {
+            foreach (['TransactionID', 'transactionId', 'transaction_id', 'orderId'] as $bankKey) {
                 $bankValue = $payload[$bankKey] ?? '';
                 if ((is_string($bankValue) || is_int($bankValue)) && trim((string) $bankValue) !== '') {
                     $bankIds[] = trim((string) $bankValue);

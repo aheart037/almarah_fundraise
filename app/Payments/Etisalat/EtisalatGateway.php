@@ -81,6 +81,10 @@ final class EtisalatGateway implements PaymentGatewayInterface
         if ($merchantOrderId !== null && preg_match('/^[A-Za-z0-9]{1,16}$/D', $merchantOrderId)) {
             $url .= '?OrderID=' . $merchantOrderId;
         }
+        $withState = $url . (str_contains($url, '?') ? '&' : '?') . 'state=' . rawurlencode($callbackState);
+        if ($callbackState !== '' && strlen($withState) <= 256) {
+            $url = $withState;
+        }
         if (strlen($url) > 256) {
             throw new PaymentGatewayException(
                 'The Etisalat return URL exceeds the gateway 256-character limit. Shorten the configured site URL.',
@@ -397,20 +401,21 @@ final class EtisalatGateway implements PaymentGatewayInterface
         $extracted = $this->api->extract(EtisalatApiClient::OP_FINALIZATION, $response);
         $code = $extracted['code'];
         $message = $extracted['message'];
-        $body = $extracted['block'];
+        // EPG field casing varies by merchant API version.
+        $body = array_change_key_case($extracted['block'], CASE_LOWER);
         $status = $this->statusMapper->mapEtisalat($code);
 
-        $providerOrderId = isset($body['OrderID']) && is_scalar($body['OrderID'])
-            ? (string) $body['OrderID']
+        $providerOrderId = isset($body['orderid']) && is_scalar($body['orderid'])
+            ? (string) $body['orderid']
             : null;
-        $returnedTxn = isset($body['TransactionID']) && is_scalar($body['TransactionID'])
-            ? (string) $body['TransactionID']
+        $returnedTxn = isset($body['transactionid']) && is_scalar($body['transactionid'])
+            ? (string) $body['transactionid']
             : null;
-        $providerCurrency = isset($body['Currency']) && is_scalar($body['Currency'])
-            ? strtoupper((string) $body['Currency'])
+        $providerCurrency = isset($body['currency']) && is_scalar($body['currency'])
+            ? strtoupper((string) $body['currency'])
             : null;
 
-        $providerAmount = $body['Amount'] ?? null;
+        $providerAmount = $body['amount'] ?? null;
         if (is_array($providerAmount)) {
             $providerAmount = $providerAmount['Value'] ?? $providerAmount['value'] ?? null;
         }
@@ -419,9 +424,26 @@ final class EtisalatGateway implements PaymentGatewayInterface
             : null;
 
         $safe = $this->safeSubset($body, [
-            'ResponseCode', 'ResponseDescription', 'TransactionID', 'OrderID',
-            'Amount', 'Currency', 'Description',
+            'responsecode', 'responsedescription', 'transactionid', 'orderid',
+            'amount', 'currency', 'description', 'approvalcode',
         ]);
+
+        foreach (['transactionid', 'orderid', 'currency'] as $field) {
+            if (array_key_exists($field, $body) && (!is_scalar($body[$field]) || trim((string) $body[$field]) === '')) {
+                return new PaymentVerificationResult(
+                    gateway: 'etisalat', status: 'processing', verified: false,
+                    providerCode: $code, providerMessage: 'Etisalat returned an invalid ' . $field . '.',
+                    providerTransactionId: $transactionId, safeResponse: $safe
+                );
+            }
+        }
+        if (array_key_exists('amount', $body) && $providerAmountDecimal === null) {
+            return new PaymentVerificationResult(
+                gateway: 'etisalat', status: 'processing', verified: false,
+                providerCode: $code, providerMessage: 'Etisalat returned an invalid amount.',
+                providerTransactionId: $transactionId, safeResponse: $safe
+            );
+        }
 
         // Finalization must refer to the same registered TransactionID. The
         // posted callback ID was already matched against our saved ID before
@@ -457,7 +479,7 @@ final class EtisalatGateway implements PaymentGatewayInterface
         // The supplied bank plugin and Qurbani integration require an
         // ApprovalCode on a successful Finalization. A code 0 without it is
         // indeterminate, not proof that this payment may be completed.
-        $approvalCode = $body['ApprovalCode'] ?? null;
+        $approvalCode = $body['approvalcode'] ?? null;
         if ($status === 'completed' && (!is_scalar($approvalCode) || trim((string) $approvalCode) === '')) {
             $this->logger->security('Etisalat success response omitted ApprovalCode', [
                 'transaction' => $transactionId,
@@ -475,11 +497,15 @@ final class EtisalatGateway implements PaymentGatewayInterface
             );
         }
 
-        // A successful response is not enough on its own. Require the OrderID
-        // and amount echoed by Finalization to match what this site registered.
-        // The bank's integration add-on verifies these fields before completion.
+        // Finalization is authenticated and uses ONLY the TransactionID saved at
+        // Registration. Some EPG versions omit OrderID/Amount; a matching bank
+        // TransactionID plus approval binds that response to the registered sum.
+        // Never ignore a conflicting echo. Without a returned TransactionID,
+        // require BOTH OrderID and Amount to bind the successful response.
         if ($status === 'completed') {
-            if ($expectedOrderId === '' || $providerOrderId === null || !self::sameOrderNumber($expectedOrderId, $providerOrderId)) {
+            if ($expectedOrderId === ''
+                || ($providerOrderId !== null && !self::sameOrderNumber($expectedOrderId, $providerOrderId))
+                || (($returnedTxn === null || $returnedTxn === '') && $providerOrderId === null)) {
                 $this->logger->security('Etisalat order id mismatch on finalization', [
                     'transaction' => $transactionId,
                 ]);
@@ -500,8 +526,9 @@ final class EtisalatGateway implements PaymentGatewayInterface
                 ? self::canonicalDecimal(Money::toProviderString($expectedAmountMinor))
                 : null;
             if ($expectedAmountDecimal === null
-                || $providerAmountDecimal === null
-                || !hash_equals($expectedAmountDecimal, $providerAmountDecimal)) {
+                || ($providerAmount !== null && ($providerAmountDecimal === null
+                    || !hash_equals($expectedAmountDecimal, $providerAmountDecimal)))
+                || (($returnedTxn === null || $returnedTxn === '') && $providerAmountDecimal === null)) {
                 $this->logger->security('Etisalat amount mismatch on finalization', [
                     'transaction' => $transactionId,
                 ]);

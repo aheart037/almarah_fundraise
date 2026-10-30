@@ -90,16 +90,28 @@ $failText = match ($prReason) {
     'expired'   => 'This payment session expired before the bank could confirm it. If your bank shows a debit, contact us with your donation reference and we will trace it.',
     default     => 'The bank could not complete this payment, so your donation has not been counted. If your bank shows a debit, contact us with your donation reference and we will trace it.',
 };
+// Only display a bank error saved by verification, never a URL error string.
+if ($prOutcome === 'failed') {
+    foreach ($prTransactions as $tx) {
+        if (in_array((string) ($tx['status'] ?? ''), ['failed', 'cancelled', 'abandoned'], true)) {
+            $bankError = trim((string) ($tx['provider_response_description'] ?? ''));
+            if ($bankError !== '') {
+                $failText .= ' Bank message: ' . $bankError;
+            }
+            break;
+        }
+    }
+}
 $view = match ($prOutcome) {
     'notfound'   => ['tone' => 'bad',  'kicker' => 'Not found', 'title' => (string) ($prTitle ?? 'We could not find that donation'),
                      'lead' => (string) ($prLead ?? 'Check the link in your receipt email, or contact our team with the reference from your bank statement.')],
-    'completed'  => ['tone' => 'ok',   'kicker' => 'Donation confirmed', 'title' => 'JazakAllah Khair!',
+    'completed'  => ['tone' => 'ok',   'kicker' => 'Payment Successful', 'title' => 'JazakAllah Khair!',
                      'lead' => 'Your donation has been confirmed by the bank. May Allah accept your generosity. Ameen.'],
     'processing' => ['tone' => 'wait', 'kicker' => 'Almost there', 'title' => 'Confirming your payment',
                      'lead' => 'The bank has not given us a final answer yet, so your donation is not counted until it does. This usually settles within a few minutes. Please do not pay again.'],
     'refunded'   => ['tone' => 'info', 'kicker' => 'Refunded', 'title' => 'This donation was refunded',
                      'lead' => 'We have refunded this donation to your original payment method. It can take a few working days to show on your statement.'],
-    default      => ['tone' => 'bad',  'kicker' => 'Payment not completed', 'title' => 'That payment did not go through',
+    default      => ['tone' => 'bad',  'kicker' => 'Payment Failed', 'title' => 'That payment did not go through',
                      'lead' => $failText],
 };
 

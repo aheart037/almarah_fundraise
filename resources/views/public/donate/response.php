@@ -22,5 +22,6 @@ $prDonation  = $donation ?? null;
 $prReference = (string) ($reference ?? '');
 $prRetryUrl  = (string) $retryUrl;
 $prStatusUrl = (string) $statusUrl;
+$prTransactions = $transactions ?? [];
 
 require __DIR__ . '/../../partials/payment-result.php';

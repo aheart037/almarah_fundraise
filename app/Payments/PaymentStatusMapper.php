@@ -16,7 +16,7 @@ final class PaymentStatusMapper
 {
     /**
      * Meezan (RBS-style) OrderStatus values.
-     * 2 = paid, 6 = cancelled are the documented values used by the reference
+     * 2 = deposited, 6 = declined are the values used by the hosted
      * integration; the remaining entries are commonly observed states. Confirm
      * against the merchant account's own documentation before go-live.
      */
@@ -24,10 +24,10 @@ final class PaymentStatusMapper
         '0'  => 'pending',      // registered, not paid
         '1'  => 'processing',   // authorised / partially paid
         '2'  => 'completed',    // fully paid
-        '3'  => 'failed',       // declined
-        '4'  => 'cancelled',    // reversed
+        '3'  => 'cancelled',    // authorisation reversed
+        '4'  => 'cancelled',    // refunded / not countable as a donation
         '5'  => 'processing',   // ACS in progress
-        '6'  => 'cancelled',    // cancelled by user
+        '6'  => 'failed',       // authorisation declined
         '7'  => 'processing',   // pending further confirmation
         '15' => 'pending',      // pre-authorised
     ];

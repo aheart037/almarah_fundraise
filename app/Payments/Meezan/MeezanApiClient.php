@@ -145,6 +145,13 @@ final class MeezanApiClient
             );
         }
 
+        if (!$result->successful()) {
+            throw new PaymentGatewayException(
+                'The bank verification endpoint returned HTTP ' . $result->statusCode . '.',
+                'meezan', 'http_error', $result->statusCode
+            );
+        }
+
         if (!$result->isJson()) {
             throw new PaymentGatewayException(
                 'Meezan returned a response that was not valid JSON.',

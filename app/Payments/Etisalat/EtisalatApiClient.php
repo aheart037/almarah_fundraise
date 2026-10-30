@@ -175,6 +175,13 @@ final class EtisalatApiClient
             );
         }
 
+        if (!$result->successful()) {
+            throw new PaymentGatewayException(
+                'The bank verification endpoint returned HTTP ' . $result->statusCode . '.',
+                'etisalat', 'http_error', $result->statusCode
+            );
+        }
+
         if (!$result->isJson()) {
             throw new PaymentGatewayException(
                 'Etisalat returned a non-JSON response for ' . $operation . ' (HTTP ' . $result->statusCode . ').',

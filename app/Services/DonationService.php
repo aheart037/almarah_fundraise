@@ -382,8 +382,11 @@ final class DonationService
             return $this->outcome('invalid', null, null, null, 'We could not find that donation.');
         }
 
-        // Expired callback states are rejected outright.
-        if (strtotime((string) $transaction['callback_state_expires_at'] . ' UTC') < time()) {
+        // A late bank return may still describe a paid transaction. Permit it
+        // only with the bank-issued identifier saved at registration; the bank
+        // is still queried below. Expired state alone is never sufficient.
+        if (strtotime((string) $transaction['callback_state_expires_at'] . ' UTC') < time()
+            && !$this->hasStoredBankReference($gatewayCode, $transaction, $payload)) {
             $this->payments->recordCallback([
                 'payment_transaction_id' => (int) $transaction['id'],
                 'gateway_id'             => $gatewayId,
@@ -493,7 +496,11 @@ final class DonationService
                 'callback_received_at' => gmdate('Y-m-d H:i:s'),
             ]);
 
-            $applied = $this->statusService->applyVerifiedResult($transaction, $fresh ?? $donation, $verification);
+            // Commit the payment and donation statuses together. A write failure
+            // must not leave one completed and the other still processing.
+            $applied = $this->db->transaction(fn () => $this->statusService->applyVerifiedResult(
+                $transaction, $fresh ?? $donation, $verification
+            ));
 
             $this->payments->recordCallback([
                 'payment_transaction_id' => (int) $transaction['id'],
@@ -543,6 +550,22 @@ final class DonationService
         return $this->outcome('processed', (int) $donation['id'], (string) $donation['public_reference'], $status, 'Thank you.');
     }
 
+    /** Bank identifiers are lookup/proof of possession, never proof of payment. */
+    private function hasStoredBankReference(string $gatewayCode, array $transaction, array $payload): bool
+    {
+        $keys = $gatewayCode === 'meezan' ? ['orderId', 'orderID'] : ['TransactionID', 'transactionId', 'transaction_id'];
+        $stored = (string) ($transaction[$gatewayCode === 'meezan' ? 'provider_order_id' : 'provider_transaction_id'] ?? '');
+        if ($stored === '' || $stored === (string) ($transaction['merchant_order_id'] ?? '')) {
+            return false;
+        }
+        foreach ($keys as $key) {
+            if (isset($payload[$key]) && is_scalar($payload[$key]) && hash_equals($stored, trim((string) $payload[$key]))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
      * @param array<string,mixed> $transaction
      * @param array<string,mixed> $payload
@@ -554,11 +577,18 @@ final class DonationService
             return null; // Meezan's return trip carries only our own order id.
         }
 
+        if (!array_key_exists('TransactionID', $payload) && !array_key_exists('transactionId', $payload)
+            && !array_key_exists('transaction_id', $payload)) {
+            // A signed-state GET return can omit POST data. Finalization uses
+            // our stored TransactionID, never a browser-provided replacement.
+            return null;
+        }
+
         $received = $payload['TransactionID'] ?? $payload['transactionId'] ?? $payload['transaction_id'] ?? null;
         if (!is_string($received) && !is_int($received) && !is_float($received)) {
             return ['received' => null, 'reason' => 'Callback did not contain a valid TransactionID.'];
         }
-        $received = (string) $received;
+        $received = trim((string) $received);
         if ($received === '') {
             return ['received' => null, 'reason' => 'Callback did not contain a TransactionID.'];
         }
@@ -609,6 +639,11 @@ final class DonationService
         $lockKey = 'payment:transaction:' . $transactionId;
 
         $result = $this->lock->withLock($lockKey, function () use ($gateway, $transaction, $donation) {
+            $transaction = $this->payments->find((int) $transaction['id']) ?? $transaction;
+            $donation = $this->donations->find((int) $donation['id']) ?? $donation;
+            if (in_array((string) $donation['status'], ['completed', 'refunded'], true)) {
+                return ['changed' => false, 'status' => (string) $donation['status'], 'reason' => 'already_terminal'];
+            }
             try {
                 $verification = $gateway->verify([
                     'providerOrderId'       => $transaction['provider_order_id'],
@@ -641,7 +676,7 @@ final class DonationService
                 ];
             }
 
-            return $this->statusService->applyVerifiedResult($transaction, $donation, $verification);
+            return $this->db->transaction(fn () => $this->statusService->applyVerifiedResult($transaction, $donation, $verification));
         });
 
         if ($result === null) {

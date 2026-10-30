@@ -271,45 +271,56 @@ final class MeezanGateway implements PaymentGatewayInterface
             );
         }
 
-        $response = $this->api->orderStatus($providerOrderId);
+        $response = array_change_key_case($this->api->orderStatus($providerOrderId), CASE_LOWER);
 
-        $orderStatus = isset($response['OrderStatus'])
-            ? (string) $response['OrderStatus']
-            : (isset($response['orderStatus']) ? (string) $response['orderStatus'] : null);
-
-        $errorCode = isset($response['ErrorCode']) ? (string) $response['ErrorCode']
-            : (isset($response['errorCode']) ? (string) $response['errorCode'] : null);
-
-        $errorMessage = (string) ($response['ErrorMessage'] ?? $response['errorMessage'] ?? '');
+        $scalar = static fn (mixed $value): ?string => is_scalar($value) ? trim((string) $value) : null;
+        $orderStatus = $scalar($response['orderstatus'] ?? null);
+        $errorCode = $scalar($response['errorcode'] ?? null);
+        $errorMessage = $scalar($response['errormessage'] ?? null) ?? '';
 
         $status = $this->statusMapper->mapMeezan($orderStatus);
 
-        // Amount / currency echoed by the provider must match what we stored.
-        // getOrderStatus.do reports Amount in minor units, the same unit the
-        // plugin sends to register.do ("1050" = 10.50). A value with a decimal
-        // point is read as rupees.
+        // getOrderStatus.do reports MINOR units, including when JSON encodes
+        // them as 1050.0 or "1050.00". Never multiply these by 100 again.
         $providerAmountMinor = null;
-        $rawAmount = $response['Amount'] ?? $response['amount'] ?? null;
-        if ($rawAmount !== null && is_numeric($rawAmount)) {
-            $rawAmount = trim((string) $rawAmount);
-            if (preg_match('/^[0-9]+$/D', $rawAmount) === 1) {
-                $providerAmountMinor = (int) $rawAmount;
-            } else {
-                try {
-                    $providerAmountMinor = Money::fromProviderString($rawAmount);
-                } catch (\Throwable $e) {
-                    $providerAmountMinor = null;
-                }
+        $rawAmount = $scalar($response['amount'] ?? null);
+        if ($rawAmount !== null && preg_match('/^([0-9]+)(?:\.0+)?$/D', $rawAmount, $match)) {
+            $digits = ltrim($match[1], '0');
+            $digits = $digits === '' ? '0' : $digits;
+            $max = (string) PHP_INT_MAX;
+            if (strlen($digits) < strlen($max) || (strlen($digits) === strlen($max) && strcmp($digits, $max) <= 0)) {
+                $providerAmountMinor = (int) $digits;
             }
         }
 
-        $providerCurrency = isset($response['Currency']) ? strtoupper((string) $response['Currency'])
-            : (isset($response['currency']) ? strtoupper((string) $response['currency']) : null);
+        $rawCurrency = $scalar($response['currency'] ?? null);
+        $providerCurrency = $rawCurrency !== null ? strtoupper($rawCurrency) : null;
         // The bank echoes the numeric ISO code (586); treat it as the same
         // currency as the configured name (PKR).
         if ($providerCurrency !== null
             && $providerCurrency === (string) ($this->config['currency_code'] ?? '586')) {
             $providerCurrency = strtoupper((string) ($this->config['currency_name'] ?? 'PKR'));
+        }
+
+        $returnedOrderId = $scalar($response['orderid'] ?? null);
+        $returnedOrderNumber = $scalar($response['ordernumber'] ?? null);
+        $expectedOrderNumber = (string) ($context['merchantOrderId'] ?? '');
+        $identityMismatch = ($returnedOrderId !== null && !hash_equals($providerOrderId, $returnedOrderId))
+            || ($returnedOrderNumber !== null && $expectedOrderNumber !== ''
+                && !hash_equals(ltrim($expectedOrderNumber, '0'), ltrim($returnedOrderNumber, '0')));
+        // API errors are not payment declines. A stale status alongside an
+        // error must never complete a donation. Require a valid amount for paid.
+        if (($errorCode !== null && !preg_match('/^0+$/D', $errorCode))
+            || $identityMismatch
+            || ($status === 'completed' && ($expectedAmountMinor === null || $providerAmountMinor === null))) {
+            return new PaymentVerificationResult(
+                gateway: 'meezan', status: 'processing', verified: false,
+                providerStatus: $orderStatus, providerCode: $errorCode,
+                providerMessage: $identityMismatch ? 'Meezan returned a different order reference.'
+                    : ($errorMessage !== '' ? $errorMessage : 'Meezan payment response could not be verified.'),
+                providerOrderId: $providerOrderId,
+                safeResponse: $this->safeSubset($response, ['orderstatus', 'errorcode', 'errormessage'])
+            );
         }
 
         if ($expectedAmountMinor !== null && $providerAmountMinor !== null && (int) $expectedAmountMinor !== $providerAmountMinor) {
@@ -327,7 +338,7 @@ final class MeezanGateway implements PaymentGatewayInterface
                 providerCode: $errorCode,
                 providerMessage: 'Amount reported by the provider does not match the donation.',
                 providerOrderId: $providerOrderId,
-                safeResponse: $this->safeSubset($response, ['OrderStatus', 'ErrorCode', 'ErrorMessage'])
+                safeResponse: $this->safeSubset($response, ['orderstatus', 'errorcode', 'errormessage'])
             );
         }
 
@@ -346,11 +357,11 @@ final class MeezanGateway implements PaymentGatewayInterface
                 providerCode: $errorCode,
                 providerMessage: 'Currency reported by the provider does not match the donation.',
                 providerOrderId: $providerOrderId,
-                safeResponse: $this->safeSubset($response, ['OrderStatus', 'ErrorCode', 'ErrorMessage'])
+                safeResponse: $this->safeSubset($response, ['orderstatus', 'errorcode', 'errormessage'])
             );
         }
 
-        if ($orderStatus === null) {
+        if ($orderStatus === null || $orderStatus === '') {
             return new PaymentVerificationResult(
                 gateway: 'meezan',
                 status: 'processing',
@@ -358,7 +369,7 @@ final class MeezanGateway implements PaymentGatewayInterface
                 providerCode: $errorCode,
                 providerMessage: $errorMessage !== '' ? $errorMessage : 'Meezan did not report an order status.',
                 providerOrderId: $providerOrderId,
-                safeResponse: $this->safeSubset($response, ['ErrorCode', 'ErrorMessage'])
+                safeResponse: $this->safeSubset($response, ['errorcode', 'errormessage'])
             );
         }
 
@@ -371,8 +382,8 @@ final class MeezanGateway implements PaymentGatewayInterface
             providerMessage: $errorMessage !== '' ? $errorMessage : null,
             amountMinor: $providerAmountMinor,
             currency: $providerCurrency,
-            providerOrderId: isset($response['orderId']) ? (string) $response['orderId'] : $providerOrderId,
-            safeResponse: $this->safeSubset($response, ['OrderStatus', 'orderId', 'ErrorCode', 'ErrorMessage'])
+            providerOrderId: isset($response['orderid']) ? (string) $response['orderid'] : $providerOrderId,
+            safeResponse: $this->safeSubset($response, ['orderstatus', 'orderid', 'errorcode', 'errormessage'])
         );
     }
 
