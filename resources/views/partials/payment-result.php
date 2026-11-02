@@ -105,8 +105,8 @@ if ($prOutcome === 'failed') {
 $view = match ($prOutcome) {
     'notfound'   => ['tone' => 'bad',  'kicker' => 'Not found', 'title' => (string) ($prTitle ?? 'We could not find that donation'),
                      'lead' => (string) ($prLead ?? 'Check the link in your receipt email, or contact our team with the reference from your bank statement.')],
-    'completed'  => ['tone' => 'ok',   'kicker' => 'Payment Successful', 'title' => 'JazakAllah Khair!',
-                     'lead' => 'Your donation has been confirmed by the bank. May Allah accept your generosity. Ameen.'],
+    'completed'  => ['tone' => 'ok',   'kicker' => 'Payment Successful', 'title' => 'Thank you for your donation!',
+                     'lead' => 'Your payment was successful, and your donation has been confirmed. Thank you for your support.'],
     'processing' => ['tone' => 'wait', 'kicker' => 'Almost there', 'title' => 'Confirming your payment',
                      'lead' => 'The bank has not given us a final answer yet, so your donation is not counted until it does. This usually settles within a few minutes. Please do not pay again.'],
     'refunded'   => ['tone' => 'info', 'kicker' => 'Refunded', 'title' => 'This donation was refunded',
@@ -144,10 +144,6 @@ $waUrl = 'https://wa.me/?text=' . rawurlencode($shareText);
       <div class="pr-icon"><?= $icons[$view['tone']] ?></div>
       <p class="pr-kicker"><?= e($view['kicker']) ?></p>
       <h1><?= e($view['title']) ?></h1>
-      <?php if ($prOutcome === 'completed'): ?>
-        <p class="pr-arabic" lang="ar" dir="rtl">جزاك الله خيرًا</p>
-      <?php endif; ?>
-
       <?php if ($prDonation !== null && $amountText !== ''): ?>
         <div class="pr-amount" aria-label="Amount <?= e($amountText) ?>">
           <?php if ($amountCur !== ''): ?><span class="pr-cur"><?= e($amountCur) ?></span><?php endif; ?>

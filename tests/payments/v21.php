@@ -226,6 +226,7 @@ check((int)$db->scalar('SELECT COUNT(*) FROM donations')===$fixtureCount && (int
 $view = new View($root);
 $html = $view->renderRaw('public/donate/response', ['outcome'=>'completed','reason'=>'','reference'=>'TEST','donation'=>null,'retryUrl'=>'/retry','statusUrl'=>'/status','transactions'=>[]]);
 check(str_contains($html,'Payment Successful'),'Payment Successful visible on existing result component');
+check(str_contains($html,'Thank you for your donation!') && !preg_match('/Jazak|Allah|Ameen|[\x{0600}-\x{06FF}]/iu', $html), 'Success result uses neutral English wording without Arabic or Urdu text');
 $html = $view->renderRaw('public/donate/response', ['outcome'=>'failed','reason'=>'failed','reference'=>'TEST','donation'=>null,'retryUrl'=>'/retry','statusUrl'=>'/status',
     'transactions'=>[['status'=>'failed','provider_response_description'=>'Card declined <script>alert(1)</script>']]]);
 check(str_contains($html,'Payment Failed') && str_contains($html,'Card declined &lt;script&gt;') && !str_contains($html,'<script>alert(1)</script>'),'Payment Failed and escaped stored bank error visible');

@@ -106,7 +106,7 @@ OFFLINE TESTING COMPLETED
 Runtime: PHP CLI 8.4.27; application code retains existing PHP 8.2+ syntax.
 - PHP syntax checked across all 224 PHP files in the patched repository: passed.
 - git diff --check: passed.
-- php tests/payments/v21.php: 69 assertions passed.
+- php tests/payments/v21.php: 70 assertions passed.
 
 The standalone regression suite uses fake HTTP responses, real gateway classes,
 return handlers, repositories, status service and in-memory SQLite. It does not
@@ -144,3 +144,13 @@ then perform bank-approved small live transactions if required:
 Live TLS, bank enrollment/return URL allowlisting, 3DS, real captures, merchant
 response variants, MySQL concurrency and donor email delivery cannot be proven
 by offline fixtures. No live credentials were requested, included or used.
+
+SUCCESS-PAGE COPY FOLLOW-UP
+
+The successful payment message is now neutral and English-only:
+- Heading: Thank you for your donation!
+- Message: Your payment was successful, and your donation has been confirmed.
+  Thank you for your support.
+- Removed the Arabic thank-you line and religious wording from the shared
+  success result component used by both bank return pages.
+No payment logic, layout, styles, or other features changed in this follow-up.
