@@ -33,7 +33,8 @@
         "migrate": "php bin/console migrate",
         "seed": "php bin/console db:seed",
         "test": "phpunit",
-        "lint": "php bin/console lint"
+        "lint": "php bin/console lint",
+        "test:reports": "php tests/reports_test.php"
     },
     "config": {
         "sort-packages": true,

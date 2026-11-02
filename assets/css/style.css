@@ -4109,3 +4109,72 @@ table.data-table tbody tr:hover td:first-child { box-shadow: inset 3px 0 0 var(-
   .pr-confetti { display: none; }
   .pr-hand, .pr-band i { animation: none; }
 }
+
+/* ==========================================================================
+   Admin Reports module (v20)
+   ========================================================================== */
+/* sidebar: expandable group */
+.dash-group { margin: 2px 0; }
+.dash-group > summary {
+  list-style: none; display: flex; align-items: center; gap: 10px; padding: 10px 12px; cursor: pointer;
+  border-radius: var(--radius); color: var(--ink-2); font-size: 14.5px; font-weight: 600; user-select: none;
+  transition: background .25s var(--ease), color .25s var(--ease);
+}
+.dash-group > summary::-webkit-details-marker { display: none; }
+.dash-group > summary > svg:first-child { width: 20px; height: 20px; flex: 0 0 auto; }
+.dash-group > summary span { flex: 1; }
+.dash-group > summary:hover { background: var(--brand-tint); color: var(--brand); }
+.dash-group > summary.active { color: var(--brand); background: var(--brand-tint); }
+.dash-chevron { width: 16px; height: 16px; flex: 0 0 auto; transition: transform .3s var(--ease); }
+.dash-group[open] > summary .dash-chevron { transform: rotate(180deg); }
+.dash-sub { margin: 4px 0 6px 18px; padding-left: 10px; border-left: 2px solid var(--brand-tint-2); display: grid; gap: 1px; }
+.dash-group[open] .dash-sub { animation: dashRise .35s var(--ease) both; }
+.dash-nav .dash-sub a { padding: 7px 10px; font-size: 13.2px; font-weight: 600; line-height: 1.3; gap: 9px; animation: none; border-radius: 10px; }
+.dash-nav .dash-sub a svg { width: 16px; height: 16px; flex: 0 0 auto; }
+.dash-nav .dash-sub a:hover { transform: translateX(3px); }
+
+/* filters */
+.rp-filters { padding: 22px; }
+.rp-form { display: grid; gap: 16px; }
+.rp-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 14px; }
+.rp-field { display: grid; gap: 6px; align-content: start; }
+.rp-field-wide { grid-column: span 2; }
+.rp-field label { font-size: 12.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.rp-field .input, .rp-field .select-field { width: 100%; }
+.rp-form-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.rp-presets { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--line); }
+.rp-basis { margin: 14px 0 0; font-size: 13.5px; color: var(--ink-2); line-height: 1.6; }
+.rp-cards { margin-top: 22px; }
+.stat-card .v.v-text { font-size: 17px; line-height: 1.35; word-break: break-word; }
+.rp-count { font-size: 13.5px; font-weight: 600; }
+
+/* tables */
+.rp-table td.rp-wrap { white-space: normal; min-width: 130px; max-width: 340px; }
+.rp-table th { white-space: nowrap; }
+.rp-sort { color: inherit; text-decoration: none; }
+.rp-sort:hover, .rp-sort.is-active { color: var(--brand); }
+
+/* notes */
+.rp-notes ul { margin: 8px 0 0; padding-left: 20px; display: grid; gap: 8px; color: var(--ink-2); font-size: 14px; line-height: 1.65; }
+
+/* directory on the overview */
+.rp-directory { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; margin-top: 14px; }
+.rp-tile { display: block; padding: 16px 18px; border: 1px solid var(--line); border-radius: 16px; background: #fff; text-decoration: none; transition: transform .25s var(--ease), border-color .25s, box-shadow .25s; }
+.rp-tile b { display: block; color: var(--ink-2); font-size: 14.5px; margin-bottom: 4px; }
+.rp-tile span { display: block; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.rp-tile:hover { transform: translateY(-3px); border-color: rgba(169, 45, 99, .35); box-shadow: 0 14px 28px -18px rgba(107, 15, 53, .45); }
+
+/* export button feedback */
+#pdfExport.is-busy { opacity: .75; pointer-events: none; }
+#pdfExport.is-busy span::after { content: "…"; }
+
+@media (max-width: 1024px) {
+  .dash-group { display: none; } /* phones use the "Reports" link in the menu panel; the overview lists every report */
+}
+@media (max-width: 640px) {
+  .rp-field-wide { grid-column: span 1; }
+  .rp-filters { padding: 16px; }
+}
+@media print {
+  .dash-side, .rp-filters, .sr-actions, .rp-presets { display: none !important; }
+}

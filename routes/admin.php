@@ -11,6 +11,7 @@ use App\Core\Router;
 use App\Http\Controllers\Admin\AuditController;
 use App\Http\Controllers\Admin\CampaignController;
 use App\Http\Controllers\Admin\MenuController;
+use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\TypographyController;
 use App\Http\Controllers\Admin\ContentController;
 use App\Http\Controllers\Admin\DashboardController;
@@ -110,6 +111,11 @@ return static function (Router $router) use ($admin, $adminCsrf, $superCsrf): vo
     $router->post('/admin/settings/fundraiser-capabilities', [SettingsController::class, 'saveFundraiserCapabilities'], $adminCsrf, 'admin.settings.fundraiser_capabilities');
     $router->post('/admin/settings/branding', [SettingsController::class, 'saveBranding'], $adminCsrf, 'admin.settings.branding');
     $router->post('/admin/settings/gateway/{code}/test', [SettingsController::class, 'testGateway'], $superCsrf, 'admin.settings.gateway.test');
+
+    // --- reports (v20): read-only, admin role required on every route -------
+    $router->get('/admin/reports', [ReportController::class, 'overview'], $admin, 'admin.reports');
+    $router->get('/admin/reports/{slug}', [ReportController::class, 'show'], $admin, 'admin.reports.show');
+    $router->get('/admin/reports/{slug}/pdf', [ReportController::class, 'pdf'], $admin, 'admin.reports.pdf');
 
     // --- audit --------------------------------------------------------------
     $router->get('/admin/audit', [AuditController::class, 'index'], $admin, 'admin.audit');

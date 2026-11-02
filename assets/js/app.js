@@ -746,6 +746,17 @@
     }
   }
 
+  /* ---------- Reports: feedback while the PDF is being prepared ---------- */
+  function initReportExport() {
+    var btn = document.getElementById("pdfExport");
+    if (!btn) { return; }
+    btn.addEventListener("click", function () {
+      btn.classList.add("is-busy");
+      // The download keeps the page open; re-enable shortly after it starts.
+      window.setTimeout(function () { btn.classList.remove("is-busy"); }, 4000);
+    });
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     initNav();
     initStickyHeader();
@@ -768,5 +779,6 @@
     initDashboardClicks();
     initCharts();
     initPaymentResult();
+    initReportExport();
   });
 })();

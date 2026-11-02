@@ -20,6 +20,30 @@ $is = static function (string $prefix) use ($path): string {
     }
     return str_starts_with($path, $prefix) ? 'active' : '';
 };
+// Reports menu (v20): open while any report page is showing.
+$reportsOpen = str_starts_with($path, '/admin/reports');
+$reportActive = static function (string $slug) use ($path): string {
+    $on = $slug === 'overview'
+        ? in_array($path, ['/admin/reports', '/admin/reports/overview'], true)
+        : $path === '/admin/reports/' . $slug;
+
+    return $on ? 'active' : '';
+};
+$reportIcons = [
+    'grid' => '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+    'heart' => '<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1L12 21.2l7.7-7.8 1.1-1a5.5 5.5 0 0 0 0-7.8z"/>',
+    'card' => '<rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 10h19M6 15h4"/>',
+    'flag' => '<path d="M4 22V4M4 4h13l-2 4 2 4H4"/>',
+    'trend' => '<path d="M3 17l6-6 4 4 8-9"/><path d="M15 6h6v6"/>',
+    'users' => '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
+    'user' => '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+    'check' => '<path d="M22 11.1V12a10 10 0 1 1-5.9-9.1"/><path d="M22 4L12 14l-3-3"/>',
+    'scale' => '<path d="M12 3v18M5 21h14M3 9l3-6 3 6a3 3 0 0 1-6 0zM15 9l3-6 3 6a3 3 0 0 1-6 0z"/>',
+    'undo' => '<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/>',
+    'bank' => '<path d="M3 10l9-6 9 6M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18"/>',
+    'mail' => '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 7l10 6 10-6"/>',
+    'shield' => '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+];
 $fullName = trim((string) ($authUser['first_name'] ?? '') . ' ' . (string) ($authUser['last_name'] ?? ''));
 ?>
 <!DOCTYPE html>
@@ -84,6 +108,21 @@ $fullName = trim((string) ($authUser['first_name'] ?? '') . ' ' . (string) ($aut
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9 9.5h4.5a1.5 1.5 0 0 1 0 3h-3a1.5 1.5 0 0 0 0 3H15"/></svg>
           Donors
         </a>
+        <details class="dash-group" <?= $reportsOpen ? 'open' : '' ?>>
+          <summary class="<?= $reportsOpen ? 'active' : '' ?>">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+            <span>Reports</span>
+            <svg class="dash-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+          </summary>
+          <div class="dash-sub">
+            <?php foreach (\App\Services\ReportService::catalog() as $reportSlug => $reportItem): ?>
+              <a href="<?= e(base_url($reportSlug === 'overview' ? 'admin/reports' : 'admin/reports/' . $reportSlug)) ?>" class="<?= $reportActive($reportSlug) ?>">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><?= $reportIcons[$reportItem['icon']] ?? '' ?></svg>
+                <span><?= e($reportItem['title']) ?></span>
+              </a>
+            <?php endforeach; ?>
+          </div>
+        </details>
         <hr>
         <a href="<?= e(base_url('admin/content')) ?>" class="<?= $is('/admin/content') ?>">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
@@ -124,6 +163,7 @@ $fullName = trim((string) ($authUser['first_name'] ?? '') . ' ' . (string) ($aut
   <a class="m-link" href="<?= e(base_url('admin/menus')) ?>">Menus</a>
   <a class="m-link" href="<?= e(base_url('admin/typography')) ?>">Fonts</a>
   <a class="m-link" href="<?= e(base_url('admin/donations')) ?>">Donations</a>
+  <a class="m-link" href="<?= e(base_url('admin/reports')) ?>">Reports</a>
   <a class="m-link" href="<?= e(base_url('admin/users')) ?>">Users</a>
   <a class="m-link" href="<?= e(base_url('admin/settings')) ?>">Settings</a>
   <a class="m-link" href="<?= e(base_url('logout')) ?>">Sign out</a>
