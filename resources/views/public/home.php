@@ -48,10 +48,17 @@ $trustPoints = array_values(array_filter(
 ));
 ?>
 
+<?php /* Hero interactions live in their own files so they load on this page only. */ ?>
+<link rel="stylesheet" href="<?= e(asset('assets/css/home-hero.css')) ?>">
+<script src="<?= e(asset('assets/js/home-hero.js')) ?>" defer></script>
+
 <div class="home-page">
   <!-- The dark, image-led hero keeps the fixed global navigation legible. -->
   <section class="home-hero" aria-labelledby="home-title">
     <div class="home-hero__glow" aria-hidden="true"></div>
+    <!-- Interactive layers (drawn by app.js: initHomeHero). Purely decorative. -->
+    <canvas class="home-hero__particles" aria-hidden="true"></canvas>
+    <div class="home-hero__spot" aria-hidden="true"></div>
     <div class="wrap home-hero__layout">
       <div class="home-hero__content">
         <p class="home-kicker home-hero__kicker"><span aria-hidden="true"></span><?= e((string) ($hero['eyebrow'] ?? 'Transform Lives Through Care')) ?></p>
@@ -95,6 +102,7 @@ $trustPoints = array_values(array_filter(
         <div class="home-hero__photo">
           <img src="<?= e(asset($heroImage)) ?>" alt="Children reading and spending time together in an Almarah care home" fetchpriority="high" decoding="async">
           <div class="home-hero__photo-shade" aria-hidden="true"></div>
+          <div class="home-hero__glare" aria-hidden="true"></div>
           <div class="home-hero__photo-caption">
             <span class="home-hero__caption-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 4l9 6.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/><path d="M9 12h6"/></svg>
@@ -243,7 +251,7 @@ $trustPoints = array_values(array_filter(
         </div>
         <div class="card-grid cols-3 home-card-grid">
           <?php foreach ($featured as $f): ?>
-            <?php $showProgress = true; require __DIR__ . '/../partials/fundraiser-card.php'; ?>
+            <?php view_partial(__DIR__ . '/../partials/fundraiser-card.php', ['f' => $f, 'showProgress' => true]); ?>
           <?php endforeach; ?>
         </div>
       </div>
@@ -264,7 +272,7 @@ $trustPoints = array_values(array_filter(
         </div>
         <div class="card-grid cols-3 home-card-grid">
           <?php foreach ($topFundraisers as $f): ?>
-            <?php $showProgress = true; require __DIR__ . '/../partials/fundraiser-card.php'; ?>
+            <?php view_partial(__DIR__ . '/../partials/fundraiser-card.php', ['f' => $f, 'showProgress' => true]); ?>
           <?php endforeach; ?>
         </div>
       </div>
@@ -322,7 +330,7 @@ $trustPoints = array_values(array_filter(
         </div>
         <div class="card-grid cols-3 home-card-grid">
           <?php foreach ($topTeams as $team): ?>
-            <?php require __DIR__ . '/../partials/team-card.php'; ?>
+            <?php view_partial(__DIR__ . '/../partials/team-card.php', ['team' => $team]); ?>
           <?php endforeach; ?>
         </div>
       </div>
@@ -343,7 +351,7 @@ $trustPoints = array_values(array_filter(
         </div>
         <div class="card-grid cols-3 home-card-grid">
           <?php foreach ($endingSoon as $f): ?>
-            <?php $showProgress = true; require __DIR__ . '/../partials/fundraiser-card.php'; ?>
+            <?php view_partial(__DIR__ . '/../partials/fundraiser-card.php', ['f' => $f, 'showProgress' => true]); ?>
           <?php endforeach; ?>
         </div>
       </div>
